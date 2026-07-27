@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VdvView 3D — Visualizador Profissional STEP</title>
+  <link rel="stylesheet" href="./src/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header id="titlebar">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <path d="M12 2 3 7v10l9 5 9-5V7l-9-5z" fill="none" stroke="#4da3ff" stroke-width="1.6"/>
+          <path d="M3 7l9 5 9-5M12 12v10" fill="none" stroke="#4da3ff" stroke-width="1.6"/>
+        </svg>
+        <span class="logo-name">VdvView<b>3D</b></span>
+      </div>
+      <div id="file-name" class="file-name">Nenhum projeto aberto</div>
+      <div class="titlebar-right"><span id="model-stats"></span></div>
+    </header>
+
+    <nav id="ribbon" aria-label="Barra de ferramentas"></nav>
+
+    <div id="workspace">
+      <aside id="tree-panel">
+        <div class="panel-header">
+          <span>Árvore da Montagem</span>
+          <button id="tree-collapse" class="mini-btn" title="Recolher painel">‹</button>
+        </div>
+        <div class="tree-search">
+          <input id="tree-search" type="text" placeholder="Buscar componente..." autocomplete="off" />
+        </div>
+        <div id="tree" class="tree"></div>
+      </aside>
+
+      <main id="viewport-wrap">
+        <div id="viewport"></div>
+        <div id="view-buttons" aria-label="Orientação de vista"></div>
+
+        <div id="welcome-card">
+          <svg viewBox="0 0 24 24" width="52" height="52" aria-hidden="true">
+            <path d="M12 2 3 7v10l9 5 9-5V7l-9-5z" fill="none" stroke="#3d7dc4" stroke-width="1.2"/>
+            <path d="M3 7l9 5 9-5M12 12v10" fill="none" stroke="#3d7dc4" stroke-width="1.2"/>
+          </svg>
+          <h1>VdvView 3D</h1>
+          <p>Visualizador profissional de projetos <b>.STEP</b> — 100% no seu navegador.<br/>
+             Seu arquivo nunca sai desta máquina.</p>
+          <div class="welcome-actions">
+            <button id="welcome-open" class="btn-primary">Abrir arquivo STEP</button>
+            <button id="welcome-demo" class="btn-secondary">Ver modelo de demonstração</button>
+          </div>
+          <p class="welcome-hint">…ou arraste um arquivo .step / .stp para esta janela</p>
+        </div>
+
+        <div id="move-panel" class="floating-panel hidden"></div>
+        <div id="props-panel" class="floating-panel hidden"></div>
+        <div id="section-panel" class="floating-panel hidden"></div>
+        <div id="explode-hud" class="hidden"></div>
+        <div id="measure-labels"></div>
+        <div id="hover-tip" class="hidden"></div>
+        <div id="present-hint" class="hidden">Modo apresentação — pressione <b>ESC</b> para sair</div>
+        <div id="drop-overlay" class="hidden"><div>Solte o arquivo .STEP aqui</div></div>
+        <div id="loading-overlay" class="hidden">
+          <div class="loading-box">
+            <div class="spinner"></div>
+            <div id="loading-text">Processando geometria…</div>
+            <div class="loading-sub">Kernel OpenCASCADE (WASM)</div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <div id="layers-bar" aria-label="Layers"></div>
+
+    <footer id="statusbar">
+      <span id="status-hint">Pronto</span>
+      <span id="status-sel"></span>
+      <span id="status-right">VdvView 3D</span>
+    </footer>
+
+    <div id="layer-dialog" class="hidden"></div>
+    <div id="modal-root"></div>
+    <div id="context-menu" class="hidden"></div>
+    <div id="toasts"></div>
+  </div>
+
+  <input type="file" id="file-input" accept=".step,.stp,.STEP,.STP" hidden />
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

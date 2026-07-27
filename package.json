@@ -1,0 +1,22 @@
+{
+  "name": "vdvview-3d",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "VdvView 3D — Visualizador profissional de projetos STEP na web",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "setup:vendor": "node scripts/copy-vendor.mjs",
+    "gen:demo": "node scripts/generate-demo-step.mjs",
+    "validate:demo": "node scripts/validate-step.mjs public/demo/demo-gabinete.step"
+  },
+  "dependencies": {
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0",
+    "occt-import-js": "0.0.x"
+  }
+}
