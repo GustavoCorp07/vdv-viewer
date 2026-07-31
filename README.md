@@ -1,12 +1,23 @@
-# VdvView 3D
+# VDV Viewer
 
-**🌐 Use agora: [fluxoraswap-hub.github.io/vdvview-3d](https://fluxoraswap-hub.github.io/vdvview-3d/)**
+**created by Gustavinho**
+
+**🌐 Use agora: [gustavocorp07.github.io/vdv-viewer](https://gustavocorp07.github.io/vdv-viewer/)**
 
 Visualizador profissional de projetos **STEP (.step/.stp)** que roda 100% no navegador —
 parsing com kernel **OpenCASCADE (WebAssembly)**, render **Three.js**, interface no padrão
-**SolidWorks** e layers no padrão **TopSolid Wood**.
+**SolidWorks**, layers no padrão **TopSolid Wood**, **login corporativo** e **projetos na
+nuvem** (Supabase) com links compartilháveis.
 
-O arquivo do cliente **nunca sai da máquina**: todo o processamento é local.
+O processamento 3D é local; os projetos salvos na nuvem ficam disponíveis para toda a equipe.
+
+## Nuvem e usuários
+
+- Login obrigatório (tela corporativa). Usuários são criados manualmente no banco
+  (Supabase → SQL Editor): `select vdv_create_user('usuario', 'senha', 'Nome Exibido');`
+- "Salvar na nuvem": explorador estilo Windows com pastas, data/hora e autor;
+  cada projeto ganha URL própria (`#/p/<código>`) que abre direto no projeto;
+- O estado salvo inclui posições movidas, peças ocultas, layers e montagens.
 
 ## Funcionalidades
 

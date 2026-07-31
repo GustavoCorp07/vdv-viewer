@@ -19,6 +19,8 @@ const ICONS = {
   reset: '<svg viewBox="0 0 24 24" fill="none" stroke="#3a6ea5" stroke-width="1.7"><path d="M4 9a8.5 8.5 0 1 1-1 5.5"/><path d="M4 4v5h5"/></svg>',
   interf: '<svg viewBox="0 0 24 24" fill="none" stroke="#c05621" stroke-width="1.7"><path d="M12 3.5 21.5 20h-19L12 3.5z"/><path d="M12 10v4.5M12 17.6v.4"/></svg>',
   present: '<svg viewBox="0 0 24 24" fill="none" stroke="#6b46a8" stroke-width="1.7"><rect x="2.5" y="4" width="19" height="12.5" rx="1.5"/><path d="M12 16.5v3M8 20.5h8"/><path d="M10 8l4.5 2.3L10 12.6V8z" fill="#6b46a8" stroke="none"/></svg>',
+  cloudopen: '<svg viewBox="0 0 24 24" fill="none" stroke="#1f6fc4" stroke-width="1.6"><path d="M7 17a4.2 4.2 0 0 1-.6-8.4 5.4 5.4 0 0 1 10.6 1A3.7 3.7 0 0 1 17 17H7z"/><path d="M12 13.5v-3M10.2 12l1.8-1.8L13.8 12" stroke-width="1.5"/></svg>',
+  cloudsave: '<svg viewBox="0 0 24 24" fill="none" stroke="#2c7a4b" stroke-width="1.6"><path d="M7 16a4.2 4.2 0 0 1-.6-8.4 5.4 5.4 0 0 1 10.6 1A3.7 3.7 0 0 1 17 16H7z"/><path d="M12 12v7M9.8 16.8L12 19l2.2-2.2" stroke-width="1.5"/></svg>',
   assembly: '<svg viewBox="0 0 24 24" fill="none" stroke="#1f6fc4" stroke-width="1.6"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9L12 3z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9M8 5.7l8 4.5"/></svg>'
 };
 
@@ -57,7 +59,9 @@ export class UI {
           { id: 'open', icon: 'open', label: 'Abrir\nSTEP', title: 'Abrir arquivo .step/.stp', onClick: () => app.openFilePicker() },
           { id: 'demo', icon: 'demo', label: 'Demons-\ntração', title: 'Carregar modelo de demonstração', onClick: () => app.loadDemo() },
           { id: 'shot', icon: 'shot', label: 'Captura\nPNG', title: 'Salvar imagem da viewport', needsModel: true, onClick: () => app.viewer.screenshot() },
-          { id: 'bom', icon: 'bom', label: 'Plano de\nCorte', title: 'Gerar plano de corte (BOM) e exportar CSV', needsModel: true, onClick: () => app.bom.showCutList() }
+          { id: 'bom', icon: 'bom', label: 'Plano de\nCorte', title: 'Gerar plano de corte (BOM) e exportar CSV', needsModel: true, onClick: () => app.bom.showCutList() },
+          { id: 'cloudopen', icon: 'cloudopen', label: 'Projetos', title: 'Abrir projetos salvos na nuvem', onClick: () => app.cloud.open('open') },
+          { id: 'cloudsave', icon: 'cloudsave', label: 'Salvar na\nnuvem', title: 'Salvar este projeto na nuvem (com link compartilhável)', needsModel: true, onClick: () => app.cloud.open('save') }
         ]
       },
       {
@@ -660,7 +664,7 @@ export class UI {
       right.style.fontWeight = '700';
       right.style.color = '#1f6fc4';
     } else {
-      right.textContent = 'VdvView 3D';
+      right.textContent = 'VDV Viewer — created by Gustavinho';
       right.style.fontWeight = '';
       right.style.color = '';
     }

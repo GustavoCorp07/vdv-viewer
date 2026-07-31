@@ -46,6 +46,21 @@ body {
 .logo { display: flex; align-items: center; gap: 8px; }
 .logo-name { font-size: 14px; font-weight: 300; letter-spacing: 0.4px; }
 .logo-name b { font-weight: 700; color: #4da3ff; }
+.logo-credit { font-size: 10px; color: #6d84a0; font-style: italic; margin-left: 2px; }
+.user-chip {
+  display: inline-flex; align-items: center; gap: 8px; margin-left: 14px;
+  font-size: 11px; color: #c7d4e2;
+}
+.user-chip button {
+  background: #2b3542; color: #9fb4cb; border: 1px solid #445263;
+  border-radius: 4px; padding: 2px 9px; font-size: 10px; cursor: pointer;
+  font-family: var(--font);
+}
+.user-chip button:hover { background: #38455a; color: #fff; }
+.welcome-credit {
+  font-size: 12px !important; color: var(--accent) !important;
+  font-style: italic; margin: -4px 0 8px !important;
+}
 .file-name {
   flex: 1; text-align: center; font-size: 12px; color: #9fb0c2;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -538,6 +553,109 @@ table.data-table tr.clickable:hover td { background: var(--accent-hover); }
 @keyframes hint-fade {
   0% { opacity: 0; } 8% { opacity: 1; } 75% { opacity: 1; }
   100% { opacity: 0; }
+}
+
+/* ---------- Tela de login (VDV Viewer) ---------- */
+#login-screen {
+  position: fixed; inset: 0; z-index: 500;
+  display: flex; align-items: center; justify-content: center;
+  background:
+    radial-gradient(1000px 500px at 75% -10%, rgba(77, 163, 255, 0.16), transparent 55%),
+    linear-gradient(160deg, #141a22 0%, #1d2733 55%, #16202c 100%);
+}
+.login-card {
+  width: 360px; padding: 38px 40px 26px;
+  background: rgba(24, 31, 40, 0.92);
+  border: 1px solid #2e3c4d; border-radius: 12px;
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.5);
+  text-align: center;
+}
+.login-logo h1 {
+  color: #e8eef5; font-size: 26px; font-weight: 300;
+  letter-spacing: 1.5px; margin-top: 10px;
+}
+.login-logo h1 b { font-weight: 700; color: #4da3ff; }
+.login-credit { color: #6d84a0; font-size: 11px; font-style: italic; margin-top: 3px; }
+.login-sub { color: #8ba0b8; font-size: 12px; margin: 8px 0 24px; }
+#login-form { text-align: left; }
+#login-form label {
+  display: block; color: #9fb4cb; font-size: 11px; font-weight: 600;
+  letter-spacing: 0.5px; text-transform: uppercase; margin: 12px 0 5px;
+}
+#login-form input {
+  width: 100%; padding: 10px 12px;
+  background: #121820; color: #e8eef5;
+  border: 1px solid #34445a; border-radius: 6px;
+  font-family: var(--font); font-size: 13px; outline: none;
+}
+#login-form input:focus { border-color: #4da3ff; }
+#login-btn {
+  width: 100%; margin-top: 20px; padding: 11px 0;
+  background: linear-gradient(180deg, #2a7fd4, #1f6fc4);
+  color: #fff; border: 1px solid #185a9f; border-radius: 6px;
+  font-family: var(--font); font-size: 14px; font-weight: 600;
+  letter-spacing: 0.4px; cursor: pointer;
+}
+#login-btn:hover { background: linear-gradient(180deg, #3990e5, #2a7fd4); }
+#login-btn:disabled { opacity: 0.6; cursor: default; }
+.login-error {
+  margin-top: 12px; padding: 8px 10px; border-radius: 5px;
+  background: rgba(204, 59, 59, 0.14); border: 1px solid #a04848;
+  color: #ff9d9d; font-size: 12px;
+}
+.login-foot { color: #5a6d83; font-size: 10.5px; margin-top: 22px; }
+
+/* ---------- Explorador de projetos na nuvem ---------- */
+.cloud-modal { width: min(780px, 94vw); }
+.cloud-toolbar {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--border-soft);
+  background: #fbfcfe;
+}
+.cloud-crumbs { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; }
+.crumb {
+  background: none; border: none; cursor: pointer; font-family: var(--font);
+  font-size: 12px; color: var(--accent); padding: 3px 7px; border-radius: 4px;
+}
+.crumb:hover { background: var(--accent-hover); }
+.crumb.current { color: var(--text); font-weight: 700; cursor: default; }
+.crumb-sep { color: var(--text-soft); font-size: 12px; }
+.cloud-actions { display: flex; gap: 6px; flex: none; }
+.cloud-savebar {
+  display: flex; gap: 8px; padding: 9px 14px;
+  border-bottom: 1px solid var(--border-soft); background: #f2f7fc;
+}
+.cloud-savebar input {
+  flex: 1; padding: 7px 10px; border: 1px solid var(--border);
+  border-radius: 4px; font-family: var(--font); font-size: 13px; outline: none;
+}
+.cloud-savebar input:focus { border-color: var(--accent); }
+.cloud-list { min-height: 300px; max-height: 46vh; overflow: auto; }
+.cloud-table { border-collapse: collapse; width: 100%; font-size: 12px; }
+.cloud-table th {
+  position: sticky; top: 0; background: var(--bg-panel-header);
+  text-align: left; padding: 6px 12px; font-size: 11px;
+  border-bottom: 1px solid var(--border-soft); z-index: 1;
+}
+.cloud-table td {
+  padding: 7px 12px; border-bottom: 1px solid #eef1f5; white-space: nowrap;
+}
+.cloud-table td:first-child {
+  display: flex; align-items: center; gap: 8px;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.cloud-row { cursor: pointer; user-select: none; }
+.cloud-row:hover td { background: var(--accent-hover); }
+.cloud-row.folder td:first-child span { font-weight: 600; }
+.cloud-empty {
+  padding: 40px 20px; text-align: center; color: var(--text-soft);
+  font-size: 12.5px;
+}
+.cloud-loading { display: flex; justify-content: center; padding: 46px 0; }
+.cloud-foot {
+  padding: 7px 14px; font-size: 11px; color: var(--text-soft);
+  border-top: 1px solid var(--border-soft); background: #fbfcfe;
+  border-radius: 0 0 8px 8px;
 }
 
 /* ---------- Scrollbars ---------- */

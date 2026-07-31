@@ -13,10 +13,11 @@
     "validate:demo": "node scripts/validate-step.mjs public/demo/demo-gabinete.step"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.110.9",
     "three": "^0.170.0"
   },
   "devDependencies": {
-    "vite": "^5.4.0",
-    "occt-import-js": "0.0.x"
+    "occt-import-js": "0.0.x",
+    "vite": "^5.4.0"
   }
 }

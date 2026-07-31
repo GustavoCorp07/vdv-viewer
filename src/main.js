@@ -10,6 +10,8 @@ import { ExplodeTool } from './explode.js';
 import { MeasureTool } from './measure.js';
 import { BomTool } from './bom.js';
 import { UI } from './ui.js';
+import { Auth } from './auth.js';
+import { CloudExplorer } from './cloud.js';
 import { fmtMM } from './utils.js';
 
 const STATUS_BY_MODE = {
@@ -51,6 +53,109 @@ class App {
     document.addEventListener('fullscreenchange', () => {
       if (!document.fullscreenElement && this.present.active) this.exitPresent();
     });
+
+    // ---- Nuvem: autenticação + explorador + rotas de compartilhamento ----
+    this.lastBuffer = null;
+    this.lastFileName = '';
+    this._cloudSlug = null;
+    this.auth = new Auth(this);
+    this.cloud = new CloudExplorer(this);
+    document.getElementById('logout-btn')
+      .addEventListener('click', () => this.auth.logout());
+    window.addEventListener('hashchange', () => this._handleRoute());
+    this.auth.init();
+  }
+
+  // ================= Sessão =================
+  onLoggedIn() {
+    const chip = document.getElementById('user-chip');
+    chip.classList.remove('hidden');
+    document.getElementById('user-name').textContent =
+      '👤 ' + (this.auth.user ? this.auth.user.display_name : '');
+    this._handleRoute();
+  }
+
+  onLoggedOut() {
+    document.getElementById('user-chip').classList.add('hidden');
+    this.cloud.close();
+  }
+
+  /** Rota #/p/<slug>: abre o projeto compartilhado após o login. */
+  _handleRoute() {
+    const m = location.hash.match(/^#\/p\/([a-z0-9]+)/i);
+    if (!m) return;
+    const slug = m[1];
+    if (slug === this._cloudSlug) return; // já aberto
+    if (!this.auth.user) return;          // abre após o login (init re-chama)
+    this.cloud.openBySlug(slug);
+  }
+
+  /** Registra o slug do projeto aberto e reflete na URL. */
+  setCloudSlug(slug) {
+    this._cloudSlug = slug;
+    const want = slug ? '#/p/' + slug : '';
+    if (location.hash !== want) {
+      if (slug) location.hash = want;
+      else history.replaceState(null, '',
+        location.pathname + location.search);
+    }
+  }
+
+  // ================= Estado do projeto na nuvem =================
+  /** Captura modificações (posições, ocultos, layers, montagens). */
+  captureCloudState() {
+    const comps = this.model.components;
+    const idx = (c) => comps.indexOf(c);
+    return {
+      v: 1,
+      offsets: comps.map((c) => [
+        +c.userOffset.x.toFixed(3),
+        +c.userOffset.y.toFixed(3),
+        +c.userOffset.z.toFixed(3)]),
+      hidden: comps.map((c) => (c.eyeVisible ? 0 : 1)),
+      layers: this.layers.layers
+        .filter((l) => l.name || l.members.size)
+        .map((l) => ({
+          id: l.id, name: l.name, active: l.active,
+          members: [...l.members].map(idx).filter((i) => i >= 0)
+        })),
+      assemblies: this.model.assemblies.map((a) => ({
+        name: a.name,
+        members: a.members.map(idx).filter((i) => i >= 0)
+      }))
+    };
+  }
+
+  /** Reaplica um estado salvo (após _loadBuffer do mesmo arquivo). */
+  applyCloudState(state) {
+    this.ui.loading(false);
+    if (!state || !Array.isArray(state.offsets)) return;
+    const comps = this.model.components;
+    state.offsets.forEach((o, i) => {
+      if (comps[i] && Array.isArray(o)) {
+        comps[i].userOffset.set(o[0] || 0, o[1] || 0, o[2] || 0);
+        comps[i].applyTransform();
+      }
+    });
+    (state.hidden || []).forEach((h, i) => {
+      if (comps[i] && h) comps[i].eyeVisible = false;
+    });
+    for (const l of state.layers || []) {
+      const layer = this.layers.layers[l.id];
+      if (!layer) continue;
+      layer.name = l.name || '';
+      layer.active = l.active !== false;
+      layer.members = new Set(
+        (l.members || []).map((i) => comps[i]).filter(Boolean));
+      for (const m of layer.members) m.layerId = layer.id;
+    }
+    for (const a of state.assemblies || []) {
+      const members = (a.members || []).map((i) => comps[i]).filter(Boolean);
+      if (members.length >= 2) this.model.createAssembly(a.name, members);
+    }
+    this.layers.refreshBar();
+    this.model.applyVisibilityAll();
+    this.ui.refreshTree();
   }
 
   // ================= Modos =================
@@ -548,6 +653,9 @@ class App {
   async _loadBuffer(buffer, name) {
     this.ui.loading(true, `Processando "${name}" no kernel OpenCASCADE…`);
     const result = await parseStep(buffer);
+    this.lastBuffer = buffer;   // retido para "Salvar na nuvem"
+    this.lastFileName = name;
+    this.setCloudSlug(null);    // novo arquivo ≠ projeto da nuvem
 
     // limpa estado anterior
     this.explode.close();

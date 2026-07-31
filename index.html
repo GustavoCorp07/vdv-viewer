@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VdvView 3D — Visualizador Profissional STEP</title>
+  <title>VDV Viewer — Visualizador Profissional STEP</title>
   <link rel="stylesheet" href="./src/styles.css" />
 </head>
 <body>
@@ -14,10 +14,17 @@
           <path d="M12 2 3 7v10l9 5 9-5V7l-9-5z" fill="none" stroke="#4da3ff" stroke-width="1.6"/>
           <path d="M3 7l9 5 9-5M12 12v10" fill="none" stroke="#4da3ff" stroke-width="1.6"/>
         </svg>
-        <span class="logo-name">VdvView<b>3D</b></span>
+        <span class="logo-name">VDV<b>Viewer</b></span>
+        <span class="logo-credit">created by Gustavinho</span>
       </div>
       <div id="file-name" class="file-name">Nenhum projeto aberto</div>
-      <div class="titlebar-right"><span id="model-stats"></span></div>
+      <div class="titlebar-right">
+        <span id="model-stats"></span>
+        <span id="user-chip" class="user-chip hidden">
+          <span id="user-name"></span>
+          <button id="logout-btn" title="Sair da conta">Sair</button>
+        </span>
+      </div>
     </header>
 
     <nav id="ribbon" aria-label="Barra de ferramentas"></nav>
@@ -43,9 +50,10 @@
             <path d="M12 2 3 7v10l9 5 9-5V7l-9-5z" fill="none" stroke="#3d7dc4" stroke-width="1.2"/>
             <path d="M3 7l9 5 9-5M12 12v10" fill="none" stroke="#3d7dc4" stroke-width="1.2"/>
           </svg>
-          <h1>VdvView 3D</h1>
+          <h1>VDV Viewer</h1>
+          <p class="welcome-credit">created by Gustavinho</p>
           <p>Visualizador profissional de projetos <b>.STEP</b> — 100% no seu navegador.<br/>
-             Seu arquivo nunca sai desta máquina.</p>
+             Abra um arquivo local ou um projeto salvo na nuvem.</p>
           <div class="welcome-actions">
             <button id="welcome-open" class="btn-primary">Abrir arquivo STEP</button>
             <button id="welcome-demo" class="btn-secondary">Ver modelo de demonstração</button>
@@ -76,7 +84,7 @@
     <footer id="statusbar">
       <span id="status-hint">Pronto</span>
       <span id="status-sel"></span>
-      <span id="status-right">VdvView 3D</span>
+      <span id="status-right">VDV Viewer — created by Gustavinho</span>
     </footer>
 
     <div id="layer-dialog" class="hidden"></div>
@@ -84,6 +92,8 @@
     <div id="context-menu" class="hidden"></div>
     <div id="toasts"></div>
   </div>
+
+  <div id="login-screen" class="hidden"></div>
 
   <input type="file" id="file-input" accept=".step,.stp,.STEP,.STP" hidden />
   <script type="module" src="./src/main.js"></script>
