@@ -58,6 +58,13 @@ export class CloudExplorer {
     try {
       this.close();
       this.app.ui.loading(true, `Baixando "${row.name}" da nuvem…`);
+      // a listagem do explorador é resumida (sem file_path/state):
+      // busca a linha completa e mais recente antes de abrir
+      if (!row.file_path || row.state === undefined) {
+        const full = await getProjectBySlug(row.slug);
+        if (!full) throw new Error('Projeto não encontrado na nuvem.');
+        row = full;
+      }
       const buffer = await downloadProjectFile(row);
       await this.app._loadBuffer(buffer, row.file_name || row.name + '.step');
       this.app.applyCloudState(row.state || {});

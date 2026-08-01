@@ -651,6 +651,7 @@ class App {
   }
 
   async _loadBuffer(buffer, name) {
+    const t0 = performance.now();
     this.ui.loading(true, `Processando "${name}" no kernel OpenCASCADE…`);
     const result = await parseStep(buffer);
     this.lastBuffer = buffer;   // retido para "Salvar na nuvem"
@@ -670,6 +671,13 @@ class App {
     this.setMode('select');
 
     this.model.build(result, name);
+
+    // tela de cálculo: mínimo de 5 s (mais, se o projeto for grande e o
+    // parse demorar — o tempo real de processamento já conta no total)
+    const elapsed = performance.now() - t0;
+    if (elapsed < 5000) {
+      await new Promise((r) => setTimeout(r, 5000 - elapsed));
+    }
     this.ui.loading(false);
     this.ui.welcome(false);
 

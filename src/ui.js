@@ -630,6 +630,62 @@ export class UI {
     const el = document.getElementById('loading-overlay');
     el.classList.toggle('hidden', !show);
     if (text) document.getElementById('loading-text').textContent = text;
+    if (show) this._startCalcTicker();
+    else this._stopCalcTicker();
+  }
+
+  /** Console de cálculos de engenharia exibido durante o carregamento. */
+  _startCalcTicker() {
+    if (this._calcTimer) return;
+    const list = document.getElementById('loading-calcs');
+    const bar = document.getElementById('loading-bar-fill');
+    list.innerHTML = '';
+    bar.style.width = '2%';
+    this._calcT0 = performance.now();
+
+    const br = (n, d = 1) => n.toFixed(d).replace('.', ',');
+    const R = (a, b) => a + Math.random() * (b - a);
+    const CALCS = [
+      () => { const v = R(0.006, 0.09); return `ρ(MDF) = 750 kg/m³ • V = ${br(v, 4)} m³ → m = ρ·V = ${br(v * 750, 2)} kg`; },
+      () => { const m = R(4, 60); return `P = m·g = ${br(m, 2)} kg × 9,81 m/s² = ${br(m * 9.81, 1)} N (peso)`; },
+      () => { const c = R(0.3, 1.8), l = R(0.2, 0.7); return `A = C×L = ${br(c, 3)} × ${br(l, 3)} = ${br(c * l, 3)} m² (face)`; },
+      () => { const c = R(300, 1800), l = R(200, 700); return `√(C² + L²) = √(${br(c, 0)}² + ${br(l, 0)}²) = ${br(Math.hypot(c, l), 1)} mm (diagonal)`; },
+      () => { const b = R(200, 600), h = R(15, 25); return `I = b·h³/12 = ${br(b, 0)}·${br(h, 0)}³/12 = ${br(b * h * h * h / 12 / 1e4, 1)}×10⁴ mm⁴`; },
+      () => `δmáx = 5qL⁴/(384·E·I) = ${br(R(0.3, 2.8), 2)} mm (flecha da prateleira)`,
+      () => `E(MDF) = 3.000 MPa • σadm = ${br(R(8, 14), 1)} MPa (tensão admissível)`,
+      () => { const f = R(120, 480); return `Fat = μ·N = 0,35 × ${br(f, 0)} = ${br(0.35 * f, 1)} N (atrito madeira)`; },
+      () => `T = K·F·d = ${br(R(1.2, 4.2), 2)} N·m (torque de fixação)`,
+      () => `x̄ = Σmᵢ·xᵢ / Σmᵢ = ${br(R(180, 820), 1)} mm (centro de massa)`,
+      () => `q = ${br(R(30, 140), 1)} N/m (carga distribuída na prateleira)`,
+      () => `Ec = ½·m·v² → estabilidade dinâmica verificada ✓`,
+      () => `M² de corte acumulado = ${br(R(1.5, 22), 3)} m²`,
+      () => `Umidade de equilíbrio da chapa: ${br(R(8, 12), 1)} %`,
+      () => `Vértices processados: ${Math.floor(R(800, 96000)).toLocaleString('pt-BR')}`,
+      () => `OBB: autovetores das normais dominantes → C×L×E resolvido ✓`,
+      () => `g = 9,80665 m/s² (gravidade padrão) • FS = ${br(R(1.8, 3.2), 1)} (fator de segurança)`
+    ];
+    let i = Math.floor(Math.random() * CALCS.length);
+
+    this._calcTimer = setInterval(() => {
+      const line = document.createElement('div');
+      line.className = 'calc-line';
+      line.textContent = '▸ ' + CALCS[i % CALCS.length]();
+      i += 1 + Math.floor(Math.random() * 2);
+      list.appendChild(line);
+      while (list.children.length > 8) list.firstChild.remove();
+      // 0→90% nos primeiros 5s; depois rasteja até 97% (projetos grandes)
+      const t = (performance.now() - this._calcT0) / 1000;
+      const p = t < 5 ? (t / 5) * 90 : Math.min(97, 90 + (t - 5) * 1.4);
+      bar.style.width = p.toFixed(1) + '%';
+    }, 330);
+  }
+
+  _stopCalcTicker() {
+    if (!this._calcTimer) return;
+    clearInterval(this._calcTimer);
+    this._calcTimer = null;
+    const bar = document.getElementById('loading-bar-fill');
+    if (bar) bar.style.width = '100%';
   }
 
   welcome(show) {

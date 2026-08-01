@@ -369,8 +369,28 @@ body {
 }
 .loading-box {
   background: #fff; border: 1px solid var(--border); border-radius: 10px;
-  padding: 26px 40px; text-align: center; box-shadow: var(--shadow);
+  padding: 26px 40px 20px; text-align: center; box-shadow: var(--shadow);
+  width: min(560px, 92vw);
 }
+.loading-bar {
+  height: 6px; margin: 16px 0 12px; border-radius: 3px;
+  background: var(--accent-soft); overflow: hidden;
+}
+#loading-bar-fill {
+  height: 100%; width: 2%;
+  background: linear-gradient(90deg, #2a7fd4, #4da3ff);
+  border-radius: 3px; transition: width 0.3s ease;
+}
+.loading-calcs {
+  text-align: left; font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 11px; line-height: 1.65; color: #3a6ea5;
+  background: #f4f8fc; border: 1px solid var(--border-soft);
+  border-radius: 6px; padding: 10px 12px; min-height: 148px;
+  overflow: hidden;
+}
+.calc-line { animation: calc-in 0.25s ease; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; }
+@keyframes calc-in { from { opacity: 0; transform: translateY(4px); } }
 .spinner {
   width: 34px; height: 34px; margin: 0 auto 14px;
   border: 3px solid var(--accent-soft); border-top-color: var(--accent);

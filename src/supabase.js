@@ -8,14 +8,35 @@ const BUCKET = 'vdv-projects';
 
 export const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ---------------- Autenticação ----------------
-/** @returns {Promise<{id,username,display_name}|null>} */
-export async function cloudLogin(username, password) {
-  const { data, error } = await sb.rpc('vdv_login', {
-    p_username: username, p_password: password
-  });
-  if (error) throw new Error(error.message);
-  return data && data.length ? data[0] : null;
+// ---------------- Autenticação (Supabase Auth) ----------------
+function sessionUser(u) {
+  if (!u) return null;
+  return {
+    id: u.id,
+    email: u.email,
+    display_name: (u.user_metadata && u.user_metadata.display_name) ||
+      (u.email || '').split('@')[0]
+  };
+}
+
+/** @returns {Promise<{id,email,display_name}|null>} null = credenciais inválidas */
+export async function cloudLogin(email, password) {
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) {
+    if (/invalid login credentials/i.test(error.message)) return null;
+    throw new Error(error.message);
+  }
+  return sessionUser(data.user);
+}
+
+/** Sessão persistida (token renovado automaticamente pelo SDK). */
+export async function currentUser() {
+  const { data } = await sb.auth.getSession();
+  return data.session ? sessionUser(data.session.user) : null;
+}
+
+export async function cloudLogout() {
+  await sb.auth.signOut();
 }
 
 // ---------------- Explorador ----------------
@@ -105,12 +126,13 @@ export async function getFolder(id) {
   return data;
 }
 
-/** Baixa o conteúdo STEP de um projeto salvo. */
+/** Baixa o conteúdo STEP de um projeto salvo (bucket privado — exige login). */
 export async function downloadProjectFile(row) {
-  const { data } = sb.storage.from(BUCKET).getPublicUrl(row.file_path);
-  const resp = await fetch(data.publicUrl, { cache: 'no-store' });
-  if (!resp.ok) throw new Error('Não foi possível baixar o arquivo do projeto.');
-  return await resp.arrayBuffer();
+  const { data, error } = await sb.storage.from(BUCKET).download(row.file_path);
+  if (error) {
+    throw new Error('Não foi possível baixar o arquivo do projeto: ' + error.message);
+  }
+  return await data.arrayBuffer();
 }
 
 /** URL compartilhável de um projeto. */
