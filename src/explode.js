@@ -559,6 +559,7 @@ export class ExplodeTool {
     if (this.playing) return;
     if (!this.model.hasModel) return;
     if (this.app.manual && this.app.manual.active) this.app.manual.close();
+    if (this.app.unlockView) this.app.unlockView();
     this.app.setMode('select');
     this.collapseInstant();
     if (!this.plan()) {

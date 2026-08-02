@@ -1,6 +1,7 @@
 // Viewport 3D: renderer, câmera, luzes, picking, destaque, tríade de eixos,
 // vistas padrão, plano de seção e captura de tela.
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { CadControls } from './controls.js';
 import { TweenManager, easeInOutCubic, clamp } from './utils.js';
 
@@ -17,9 +18,18 @@ export class Viewer {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setClearColor(0x000000, 0);
     this.renderer.localClippingEnabled = true;
+    // visual realista por padrão: tone mapping cinematográfico + sombras
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.02;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
+    // iluminação por ambiente (IBL) — reflexos e luz difusa de estúdio
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    pmrem.dispose();
     this.modelGroup = new THREE.Group();
     this.scene.add(this.modelGroup);
     this.overlayGroup = new THREE.Group(); // medições etc. (sem picking)
@@ -69,17 +79,59 @@ export class Viewer {
   }
 
   _setupLights() {
-    const hemi = new THREE.HemisphereLight(0xffffff, 0x8f98a3, 0.85);
+    // o ambiente HDR fornece a luz difusa; estas complementam forma e sombra
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x8f98a3, 0.3);
     hemi.position.set(0, 0, 1);
     this.scene.add(hemi);
 
-    const key = new THREE.DirectionalLight(0xffffff, 1.35);
-    key.position.set(0.8, -0.6, 1.1);
-    this.scene.add(key);
+    this.keyLight = new THREE.DirectionalLight(0xfff6e8, 1.6);
+    this.keyLight.position.set(0.8, -0.6, 1.1);
+    this.scene.add(this.keyLight);
+    this.scene.add(this.keyLight.target);
 
-    const fill = new THREE.DirectionalLight(0xdfe8f5, 0.45);
+    const fill = new THREE.DirectionalLight(0xdfe8f5, 0.3);
     fill.position.set(-0.7, 0.8, 0.35);
     this.scene.add(fill);
+  }
+
+  /**
+   * Prepara o palco realista para o modelo carregado: sol com sombras
+   * enquadradas na cena e "chão" invisível que só recebe sombra.
+   */
+  stageForModel(box) {
+    if (!box || box.isEmpty()) {
+      if (this.ground) this.ground.visible = false;
+      this.keyLight.castShadow = false;
+      return;
+    }
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const radius = Math.max(size.length() / 2, 100);
+
+    const key = this.keyLight;
+    key.castShadow = true;
+    key.position.copy(center).add(
+      new THREE.Vector3(radius * 1.1, -radius * 1.3, radius * 1.9));
+    key.target.position.copy(center);
+    const sc = key.shadow.camera;
+    sc.left = -radius * 1.8; sc.right = radius * 1.8;
+    sc.top = radius * 1.8; sc.bottom = -radius * 1.8;
+    sc.near = 1; sc.far = radius * 8;
+    sc.updateProjectionMatrix();
+    key.shadow.mapSize.set(2048, 2048);
+    key.shadow.bias = -0.0004;
+    if (key.shadow.map) { key.shadow.map.dispose(); key.shadow.map = null; }
+
+    if (!this.ground) {
+      this.ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(1, 1),
+        new THREE.ShadowMaterial({ opacity: 0.20 }));
+      this.ground.receiveShadow = true;
+      this.scene.add(this.ground);
+    }
+    this.ground.scale.set(radius * 12, radius * 12, 1);
+    this.ground.position.set(center.x, center.y, box.min.z - 0.5);
+    this.ground.visible = true;
   }
 
   _setupTriad() {
@@ -389,7 +441,29 @@ export class Viewer {
     this._flyTo(az, polar, dist, center, animate ? 550 : 0);
   }
 
-  setView(name, box) {
+  /** Posiciona a câmera EXATAMENTE na vista ortográfica (0° de inclinação). */
+  applyExactView(name, box) {
+    const center = box && !box.isEmpty()
+      ? box.getCenter(new THREE.Vector3())
+      : this.controls.target.clone();
+    const dist = box && !box.isEmpty()
+      ? this.fitDistanceFor(box) : this.controls.distance;
+    const offsets = {
+      frente: [0, -dist, 0], tras: [0, dist, 0],
+      esquerda: [-dist, 0, 0], direita: [dist, 0, 0],
+      topo: [0, 0, dist], base: [0, 0, -dist]
+    };
+    const off = offsets[name];
+    if (!off) return;
+    this.controls.target.copy(center);
+    this.camera.position.set(
+      center.x + off[0], center.y + off[1], center.z + off[2]);
+    this.camera.up.set(0, 0, name === 'topo' || name === 'base' ? 0 : 1);
+    if (name === 'topo' || name === 'base') this.camera.up.set(0, 1, 0);
+    this.camera.lookAt(center);
+  }
+
+  setView(name, box, opts) {
     // vistas EXATAS, sem nenhuma inclinação (topo/base a 0,03° do polo —
     // matematicamente estável e visualmente perfeito)
     const views = {
@@ -407,14 +481,16 @@ export class Viewer {
       ? box.getCenter(new THREE.Vector3())
       : this.controls.target.clone();
     const dist = box && !box.isEmpty() ? this.fitDistanceFor(box) : this.controls.distance;
-    this._flyTo(v.az, v.polar, dist, center, 550);
+    this._flyTo(v.az, v.polar, dist, center, 550,
+      opts && opts.exact ? () => this.applyExactView(name, box) : null);
   }
 
-  _flyTo(az, polar, dist, target, duration = 550) {
+  _flyTo(az, polar, dist, target, duration = 550, onComplete = null) {
     const start = this.controls.getSpherical();
     const startTarget = this.controls.target.clone();
     if (duration <= 0) {
       this.controls.setSpherical(az, polar, dist, target);
+      if (onComplete) onComplete();
       return;
     }
     // caminho angular mais curto
@@ -433,7 +509,8 @@ export class Viewer {
           start.dist + (dist - start.dist) * t,
           tg
         );
-      }
+      },
+      onComplete
     });
   }
 

@@ -42,14 +42,11 @@ export class Auth {
     this.el.innerHTML = `
       <div class="login-card">
         <div class="login-logo">
-          <svg viewBox="0 0 24 24" width="46" height="46" aria-hidden="true">
-            <path d="M12 2 3 7v10l9 5 9-5V7l-9-5z" fill="none" stroke="#4da3ff" stroke-width="1.4"/>
-            <path d="M3 7l9 5 9-5M12 12v10" fill="none" stroke="#4da3ff" stroke-width="1.4"/>
-          </svg>
+          <img src="./logo.png" alt="VDV" class="login-logo-img" />
           <h1>VDV <b>Viewer</b></h1>
           <p class="login-credit">created by Gustavinho</p>
         </div>
-        <p class="login-sub">Visualizador profissional de projetos 3D</p>
+        <p class="login-sub">Motor de engenharia Van de Velde</p>
         <form id="login-form" autocomplete="off">
           <label>E-mail</label>
           <input type="email" id="login-user" placeholder="seu e-mail" autocomplete="username" />

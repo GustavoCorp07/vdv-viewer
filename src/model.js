@@ -77,16 +77,22 @@ export class Component {
       : new THREE.Color(PALETTE[meshIndex % PALETTE.length]);
 
     // --- Objetos 3D ---
-    const material = new THREE.MeshPhongMaterial({
+    // material físico: reage ao ambiente HDR com verniz sutil de fábrica
+    const material = new THREE.MeshPhysicalMaterial({
       color: this.baseColor.clone(), // instância Color = já no espaço de trabalho
-      shininess: 32,
-      specular: 0x2b2b2b,
+      roughness: 0.55,
+      metalness: 0.02,
+      clearcoat: 0.18,
+      clearcoatRoughness: 0.6,
+      envMapIntensity: 1.0,
       side: THREE.DoubleSide,
       polygonOffset: true,
       polygonOffsetFactor: 1,
       polygonOffsetUnits: 1
     });
     this.mesh = new THREE.Mesh(geometry, material);
+    this.mesh.castShadow = true;
+    this.mesh.receiveShadow = true;
     this.mesh.userData.comp = this;
 
     this.edgeMaterial = new THREE.LineBasicMaterial({ color: 0x252b32 });
@@ -227,6 +233,7 @@ export class ModelManager {
     this.isolatedComp = null;
     this.assemblies = [];
     this.viewer.setComponents([]);
+    this.viewer.stageForModel(null);
     this.viewer.setHover(null);
     this.viewer.setSelected(null);
     this.viewer.setDanger([]);
@@ -332,6 +339,7 @@ export class ModelManager {
     });
 
     this.viewer.setComponents(this.components);
+    this.viewer.stageForModel(this.originalBox());
     this.applyVisibilityAll();
   }
 

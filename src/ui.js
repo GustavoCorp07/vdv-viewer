@@ -24,7 +24,8 @@ const ICONS = {
   assembly: '<svg viewBox="0 0 24 24" fill="none" stroke="#1f6fc4" stroke-width="1.6"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9L12 3z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9M8 5.7l8 4.5"/></svg>',
   tex: '<svg viewBox="0 0 24 24" fill="none" stroke="#8a5a2b" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9c4-2.5 7 2.5 11 0s7 0 7 0M3 15c4-2.5 7 2.5 11 0s7 0 7 0" opacity="0.8"/></svg>',
   render: '<svg viewBox="0 0 24 24" fill="none" stroke="#b3541e" stroke-width="1.6"><circle cx="12" cy="12" r="8.6"/><circle cx="12" cy="12" r="3.4" fill="#b3541e" fill-opacity="0.25"/><path d="M12 3.4v3M12 17.6v3M3.4 12h3M17.6 12h3"/></svg>',
-  manual: '<svg viewBox="0 0 24 24" fill="none" stroke="#2c7a4b" stroke-width="1.6"><path d="M4 4.5h6.5a2 2 0 0 1 2 2v13a2 2 0 0 0-2-2H4v-13z"/><path d="M20 4.5h-6.5a2 2 0 0 0-2 2v13a2 2 0 0 1 2-2H20v-13z"/><path d="M6.5 8h3M6.5 11h3M14.5 8h3M14.5 11h3"/></svg>'
+  manual: '<svg viewBox="0 0 24 24" fill="none" stroke="#2c7a4b" stroke-width="1.6"><path d="M4 4.5h6.5a2 2 0 0 1 2 2v13a2 2 0 0 0-2-2H4v-13z"/><path d="M20 4.5h-6.5a2 2 0 0 0-2 2v13a2 2 0 0 1 2-2H20v-13z"/><path d="M6.5 8h3M6.5 11h3M14.5 8h3M14.5 11h3"/></svg>',
+  hideeye: '<svg viewBox="0 0 24 24" fill="none" stroke="#a2543a" stroke-width="1.8"><path d="M4 4l16 16M9.9 6.3A9.8 9.8 0 0 1 12 5.8c6 0 9.5 6.2 9.5 6.2a17 17 0 0 1-3.3 3.9M6 8.2A16 16 0 0 0 2.5 12S6 18.2 12 18.2c1 0 2-.16 2.9-.44"/></svg>'
 };
 
 const EYE_ON =
@@ -84,6 +85,7 @@ export class UI {
         label: 'Exibir',
         buttons: [
           { id: 'fit', icon: 'fit', label: 'Enqua-\ndrar', title: 'Zoom ajustar (F)', needsModel: true, onClick: () => app.fitAll() },
+          { id: 'hide', icon: 'hideeye', label: 'Ocultar', title: 'Ocultar componentes: clique neles ou arraste um retângulo', needsModel: true, mode: 'hide' },
           { id: 'isolate', icon: 'isolate', label: 'Isolar', title: 'Isolar componente selecionado', needsModel: true, toggle: true, onClick: () => app.toggleIsolate() },
           { id: 'xray', icon: 'xray', label: 'Raio-X', title: 'Transparência fantasma (ver peças internas)', needsModel: true, toggle: true, onClick: () => app.toggleXray() },
           { id: 'section', icon: 'section', label: 'Seção', title: 'Vista de seção dinâmica', needsModel: true, toggle: true, onClick: () => app.toggleSection() },
@@ -153,6 +155,7 @@ export class UI {
   buildViewButtons() {
     const bar = document.getElementById('view-buttons');
     bar.innerHTML = '';
+    this.viewBtns = {};
     const views = [
       ['iso', 'ISO'], ['frente', 'Frente'], ['tras', 'Trás'],
       ['esquerda', 'Esq.'], ['direita', 'Dir.'], ['topo', 'Topo'], ['base', 'Base']
@@ -161,9 +164,26 @@ export class UI {
       const b = document.createElement('button');
       b.className = 'view-btn';
       b.textContent = label;
-      b.addEventListener('click', () =>
-        this.app.viewer.setView(key, this.app.model.unionBox()));
+      b.title = key === 'iso'
+        ? 'Vista isométrica'
+        : `Vista ${label} exata (90°) — trava o ângulo; clique de novo para destravar`;
+      b.addEventListener('click', () => {
+        if (key === 'iso') {
+          this.app.unlockView();
+          this.app.viewer.setView('iso', this.app.model.unionBox());
+        } else {
+          this.app.setViewLocked(key);
+        }
+      });
       bar.appendChild(b);
+      this.viewBtns[key] = b;
+    }
+  }
+
+  refreshViewButtons() {
+    const lock = this.app.viewer.viewLock;
+    for (const [key, b] of Object.entries(this.viewBtns)) {
+      b.classList.toggle('active', lock === key);
     }
   }
 

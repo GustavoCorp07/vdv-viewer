@@ -45,8 +45,8 @@ async function walk(dir, brand) {
     seen.add(id);
     try {
       await sharp(p)
-        .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 78, mozjpeg: true })
+        .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 84, mozjpeg: true })
         .toFile(join(OUT, id + '.jpg'));
       entries.push({ id, name: dispName, brand: b, file: 'texturas/' + id + '.jpg' });
       done++;

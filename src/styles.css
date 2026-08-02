@@ -44,6 +44,9 @@ body {
   flex: none;
 }
 .logo { display: flex; align-items: center; gap: 8px; }
+.logo-img { width: 22px; height: 22px; border-radius: 5px; display: block; }
+.welcome-logo { width: 60px; height: 60px; border-radius: 12px; }
+.login-logo-img { width: 58px; height: 58px; border-radius: 12px; }
 .logo-name { font-size: 14px; font-weight: 300; letter-spacing: 0.4px; }
 .logo-name b { font-weight: 700; color: #4da3ff; }
 .logo-credit { font-size: 10px; color: #6d84a0; font-style: italic; margin-left: 2px; }
@@ -204,6 +207,10 @@ body {
   cursor: pointer; color: var(--text);
 }
 .view-btn:hover { background: var(--accent-hover); border-color: #bcd6ef; }
+.view-btn.active {
+  background: var(--accent); color: #fff; border-color: #185a9f;
+  font-weight: 700;
+}
 
 /* ---------- Welcome ---------- */
 #welcome-card {

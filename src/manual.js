@@ -26,6 +26,7 @@ export class ManualTool {
 
   open() {
     if (!this.app.model.hasModel) return;
+    this.app.unlockView();
     this.app.setMode('select');
     this.app.select(null);
     this.app.explode.close();

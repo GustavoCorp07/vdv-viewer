@@ -1,8 +1,7 @@
-// Ferramenta Renderizar: modo fotorrealista (iluminação por ambiente HDR,
-// materiais físicos, sombras suaves, tone mapping ACES) com captura de
-// FOTO 4K e VÍDEO 4K (WebM) orbitando o projeto em 360°.
+// Ferramenta Renderizar: a cena padrão já é realista (IBL + ACES +
+// sombras + materiais físicos); este modo esconde as arestas técnicas e
+// dá o acabamento final para capturar FOTO 4K e VÍDEO 360° (WebM) 4K.
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 const QUALITIES = {
   fullhd: { label: 'Full HD (1920×1080)', w: 1920, h: 1080, bits: 16e6 },
@@ -63,102 +62,29 @@ export class RenderTool {
     });
   }
 
-  // ---------------- Modo fotorrealista ----------------
+  // ---------------- Acabamento de estúdio ----------------
   _enter() {
     if (this.active) return;
     this.active = true;
     const r = this.viewer.renderer;
-    const scene = this.viewer.scene;
-    const model = this.app.model;
-
-    if (!this._env) {
-      const pmrem = new THREE.PMREMGenerator(r);
-      this._env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-      pmrem.dispose();
-    }
-
     this._saved = {
-      mats: model.components.map((c) => ({
-        comp: c, mat: c.mesh.material, edges: c.edges.visible
-      })),
-      toneMapping: r.toneMapping,
+      edges: this.app.model.components.map((c) => c.edges.visible),
       exposure: r.toneMappingExposure
     };
-
-    for (const c of model.components) {
-      const src = c.mesh.material;
-      const phys = new THREE.MeshPhysicalMaterial({
-        color: src.color.clone(),
-        map: src.map || null,
-        roughness: 0.52,
-        metalness: 0.02,
-        clearcoat: 0.25,
-        clearcoatRoughness: 0.55,
-        envMapIntensity: 1.1,
-        side: THREE.DoubleSide
-      });
-      c.mesh.material = phys;
-      c.mesh.castShadow = true;
-      c.mesh.receiveShadow = true;
-      c.edges.visible = false;
-    }
-
-    scene.environment = this._env;
-    r.toneMapping = THREE.ACESFilmicToneMapping;
-    r.toneMappingExposure = 1.05;
-    r.shadowMap.enabled = true;
-    r.shadowMap.type = THREE.PCFSoftShadowMap;
-
-    // sol com sombras enquadradas no modelo + chão que só recebe sombra
-    const box = model.unionBox();
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
-    const radius = size.length() / 2;
-    this._sun = new THREE.DirectionalLight(0xfff4e0, 2.2);
-    this._sun.position.copy(center).add(
-      new THREE.Vector3(radius * 1.2, -radius * 1.4, radius * 2));
-    this._sun.target.position.copy(center);
-    this._sun.castShadow = true;
-    const cam = this._sun.shadow.camera;
-    cam.left = -radius * 1.6; cam.right = radius * 1.6;
-    cam.top = radius * 1.6; cam.bottom = -radius * 1.6;
-    cam.near = 1; cam.far = radius * 8;
-    this._sun.shadow.mapSize.set(2048, 2048);
-    this._sun.shadow.bias = -0.0004;
-    scene.add(this._sun);
-    scene.add(this._sun.target);
-
-    this._ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(radius * 8, radius * 8),
-      new THREE.ShadowMaterial({ opacity: 0.22 }));
-    this._ground.position.set(center.x, center.y, box.min.z - 0.5);
-    this._ground.receiveShadow = true;
-    scene.add(this._ground);
-
+    for (const c of this.app.model.components) c.edges.visible = false;
+    r.toneMappingExposure = 1.12;
     this.viewer.showTriad = false;
-    this.app.ui.toast('Modo fotorrealista ativado.', 'success');
+    this.app.ui.toast('Acabamento de estúdio ativado.', 'success');
   }
 
   _exit() {
     if (!this.active) return;
     this.active = false;
     const r = this.viewer.renderer;
-    for (const s of this._saved.mats) {
-      s.comp.mesh.material.dispose();
-      s.comp.mesh.material = s.mat;
-      s.comp.mesh.castShadow = false;
-      s.comp.mesh.receiveShadow = false;
-      s.comp.edges.visible = s.edges;
-    }
-    this.viewer.scene.environment = null;
-    r.toneMapping = this._saved.toneMapping;
+    this.app.model.components.forEach((c, i) => {
+      c.edges.visible = this._saved.edges[i];
+    });
     r.toneMappingExposure = this._saved.exposure;
-    r.shadowMap.enabled = false;
-    this.viewer.scene.remove(this._sun, this._sun.target, this._ground);
-    this._ground.geometry.dispose();
-    this._ground.material.dispose();
-    this._sun = null;
-    this._ground = null;
     this.viewer.showTriad = true;
     this._saved = null;
   }
@@ -187,6 +113,7 @@ export class RenderTool {
   // ---------------- Vídeo 360° ----------------
   _record(content) {
     if (this.recording) return;
+    this.app.unlockView();
     const q = QUALITIES[content.querySelector('[data-role="q"]').value];
     const dur = parseInt(content.querySelector('[data-role="dur"]').value, 10);
     const r = this.viewer.renderer;

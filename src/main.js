@@ -26,6 +26,8 @@ const STATUS_BY_MODE = {
     'Modo Medir — aproxime o cursor de vértices, arestas e faces (o alvo gruda) e clique • Esc limpa',
   boxselect:
     'Criar montagem — clique e ARRASTE um retângulo em volta dos componentes desejados • Esc cancela',
+  hide:
+    'Modo Ocultar — clique nos componentes OU arraste um retângulo para ocultar vários • "Mostrar tudo" reexibe • Esc sai',
   texture:
     'Modo Textura — escolha uma textura no painel e clique nos componentes para aplicar • botão direito remove'
 };
@@ -180,7 +182,7 @@ class App {
     if (prev === 'move') this.move.disable();
     if (prev === 'measure') this.measure.clear();
     if (prev === 'texture') this.texture.disable();
-    if (prev === 'boxselect') {
+    if (prev === 'boxselect' || prev === 'hide') {
       document.getElementById('box-select-rect').classList.add('hidden');
       this._boxSel = null;
       this.viewer.container.style.cursor = '';
@@ -189,7 +191,7 @@ class App {
 
     if (mode === 'move') this.move.enable();
     if (mode === 'texture') this.texture.enable();
-    if (mode === 'boxselect') {
+    if (mode === 'boxselect' || mode === 'hide') {
       this.select(null);
       this.viewer.container.style.cursor = 'crosshair';
     }
@@ -379,7 +381,17 @@ class App {
         if (hit) this.layers.captureToggle(hit.comp);
         return;
       }
+      if (this._dragJustEnded) { this._dragJustEnded = false; return; }
       if (this.mode === 'boxselect') return;
+      if (this.mode === 'hide') {
+        if (hit) {
+          hit.comp.eyeVisible = false;
+          this.model.applyVisibilityAll();
+          this.ui.refreshTree();
+          this.ui.toast(`"${hit.comp.name}" ocultado.`);
+        }
+        return;
+      }
       if (this.mode === 'texture') {
         if (hit) this.texture.apply(hit.comp);
         return;
@@ -408,11 +420,13 @@ class App {
       if (hit) this.showContextMenu(e.clientX, e.clientY, hit.comp);
     });
 
-    // ---- seleção retangular (Criar montagem por arrasto) ----
+    // ---- retângulo de arrasto (Criar montagem e Ocultar) ----
     const rectEl = document.getElementById('box-select-rect');
     this._boxSel = null;
+    this._dragJustEnded = false;
     dom.addEventListener('pointerdown', (e) => {
-      if (this.mode !== 'boxselect' || e.button !== 0) return;
+      if ((this.mode !== 'boxselect' && this.mode !== 'hide') ||
+          e.button !== 0) return;
       e.preventDefault();
       this._boxSel = { x0: e.clientX, y0: e.clientY, x1: e.clientX, y1: e.clientY };
       this._drawBoxSel(rectEl);
@@ -429,10 +443,22 @@ class App {
       this._boxSel = null;
       rectEl.classList.add('hidden');
       const w = Math.abs(b.x1 - b.x0), h = Math.abs(b.y1 - b.y0);
-      if (w < 8 && h < 8) return; // clique sem arrasto
+      if (w < 8 && h < 8) return; // clique sem arrasto (tratado no 'click')
+      this._dragJustEnded = true;  // suprime o 'click' disparado ao soltar
       const picked = this._compsInScreenRect(
         Math.min(b.x0, b.x1), Math.min(b.y0, b.y1),
         Math.max(b.x0, b.x1), Math.max(b.y0, b.y1));
+
+      if (this.mode === 'hide') {
+        if (picked.length) {
+          for (const c of picked) c.eyeVisible = false;
+          this.model.applyVisibilityAll();
+          this.ui.refreshTree();
+          this.ui.toast(`${picked.length} componente(s) ocultado(s).`);
+        }
+        return; // permanece no modo Ocultar
+      }
+
       if (picked.length < 2) {
         this.ui.toast('Envolva pelo menos 2 componentes no retângulo.', 'warn');
         return;
@@ -578,6 +604,7 @@ class App {
   togglePresent() {
     if (this.present.active) { this.exitPresent(); return; }
     if (!this.model.hasModel) return;
+    this.unlockView();
     this.setMode('select');
     this.ui.hideContextMenu();
     const box = this.model.unionBox();
@@ -650,6 +677,7 @@ class App {
       } else if (e.key === 'Escape') {
         if (this.present.active) { this.exitPresent(); return; }
         if (this.layers.capture) { this.layers.cancelCapture(); return; }
+        if (this.viewer.viewLock) { this.unlockView(); return; }
         if (this.explode.playing) { this.explode.skip(); return; }
         this.ui.hideContextMenu();
         this.measure.clear();
@@ -674,6 +702,41 @@ class App {
     this.move.undoEntry(entry);
     this.ui.toast('Movimento desfeito (Ctrl+Z).');
     this.setSelStatus();
+  }
+
+  // ================= Vistas travadas =================
+  /** Vista ortográfica exata e TRAVADA: zoom/pan mantêm o ângulo; a
+   *  órbita fica bloqueada até clicar de novo no botão (ou Esc). */
+  setViewLocked(name) {
+    const v = this.viewer;
+    if (v.viewLock === name) { this.unlockView(); return; }
+    const labels = {
+      frente: 'Frente', tras: 'Trás', esquerda: 'Esquerda',
+      direita: 'Direita', topo: 'Topo', base: 'Base'
+    };
+    v.viewLock = name;
+    v.controls.lockOrbit = true;
+    v.controls.onOrbitBlocked = () => {
+      this.ui.setStatus(
+        `Vista ${labels[name]} TRAVADA — clique no botão "${labels[name]}" ou Esc para destravar a órbita`);
+    };
+    v.setView(name, this.model.unionBox(), { exact: true });
+    this.ui.refreshViewButtons();
+    this.ui.toast(
+      `Vista ${labels[name]} travada em 90° — zoom e pan mantêm o ângulo. ` +
+      'Clique de novo no botão para destravar.', 'success');
+  }
+
+  unlockView() {
+    const v = this.viewer;
+    if (!v.viewLock) return;
+    v.viewLock = null;
+    v.controls.lockOrbit = false;
+    v.controls.onOrbitBlocked = null;
+    v.camera.up.set(0, 0, 1);
+    v.camera.lookAt(v.controls.target);
+    this.ui.refreshViewButtons();
+    this.ui.toast('Vista destravada — órbita liberada.');
   }
 
   // ================= Exibição =================

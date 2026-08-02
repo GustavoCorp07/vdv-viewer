@@ -4,7 +4,7 @@
 
 **🌐 Use agora: [gustavocorp07.github.io/vdv-viewer](https://gustavocorp07.github.io/vdv-viewer/)**
 
-Visualizador profissional de projetos **STEP (.step/.stp)** que roda 100% no navegador —
+**Motor de engenharia Van de Velde** — projetos **STEP (.step/.stp)** 100% no navegador:
 parsing com kernel **OpenCASCADE (WebAssembly)**, render **Three.js**, interface no padrão
 **SolidWorks**, layers no padrão **TopSolid Wood**, **login corporativo** e **projetos na
 nuvem** (Supabase) com links compartilháveis.

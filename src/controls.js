@@ -26,6 +26,8 @@ export class CadControls {
     this.pickPoint = pickPoint;
     this.target = new THREE.Vector3();
     this.enabled = true;
+    this.lockOrbit = false;   // vista ortográfica travada: órbita bloqueada
+    this.onOrbitBlocked = null;
 
     this._mode = null; // 'orbit' | 'pan' | 'zoomdrag'
     this._pivot = new THREE.Vector3();
@@ -63,6 +65,11 @@ export class CadControls {
     if (!this.enabled || ev.button !== 1) return;
     ev.preventDefault();
     this._mode = ev.ctrlKey ? 'pan' : ev.shiftKey ? 'zoomdrag' : 'orbit';
+    if (this._mode === 'orbit' && this.lockOrbit) {
+      this._mode = null;
+      if (this.onOrbitBlocked) this.onOrbitBlocked();
+      return;
+    }
     this._last.x = ev.clientX;
     this._last.y = ev.clientY;
     if (this._mode === 'orbit') {
