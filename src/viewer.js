@@ -175,10 +175,14 @@ export class Viewer {
   render() {
     const r = this.renderer;
     r.autoClear = true;
-    r.setViewport(0, 0, this.container.clientWidth, this.container.clientHeight);
+    // usa o tamanho do buffer (não o CSS): na renderização 4K o buffer
+    // é maior que a janela e o viewport precisa cobri-lo por inteiro
+    const pr = r.getPixelRatio();
+    r.setViewport(0, 0, r.domElement.width / pr, r.domElement.height / pr);
     r.render(this.scene, this.camera);
 
     // Tríade de eixos no canto inferior esquerdo
+    if (this.showTriad === false) return;
     const size = 96;
     r.autoClear = false;
     r.clearDepth();
@@ -289,18 +293,19 @@ export class Viewer {
     this._setPointerFromEvent(ev);
     this.raycaster.setFromCamera(this._pointer, this.camera);
     const hits = this.raycaster.intersectObject(comp.mesh, false);
-    let point = null, faceIndex = null;
+    let point = null, faceIndex = null, face = null;
     for (const h of hits) {
       if (this.sectionEnabled &&
           this.sectionPlane.distanceToPoint(h.point) < 0) continue;
       point = h.point.clone();
       faceIndex = h.faceIndex;
+      face = h.face;
       break;
     }
     if (!point) {
       point = comp.currentAABB(new THREE.Box3()).getCenter(new THREE.Vector3());
     }
-    return { comp, point, faceIndex, object: comp.mesh };
+    return { comp, point, faceIndex, face, object: comp.mesh };
   }
 
   /** Ponto 3D sob o cursor (pivô de órbita / zoom) — raycast leve, sem GPU. */
@@ -385,14 +390,16 @@ export class Viewer {
   }
 
   setView(name, box) {
+    // vistas EXATAS, sem nenhuma inclinação (topo/base a 0,03° do polo —
+    // matematicamente estável e visualmente perfeito)
     const views = {
       iso:      { az: -Math.PI / 4 - Math.PI / 2, polar: Math.PI / 3 },
       frente:   { az: -Math.PI / 2, polar: Math.PI / 2 },
       tras:     { az: Math.PI / 2, polar: Math.PI / 2 },
       esquerda: { az: Math.PI, polar: Math.PI / 2 },
       direita:  { az: 0, polar: Math.PI / 2 },
-      topo:     { az: -Math.PI / 2, polar: 0.04 },
-      base:     { az: -Math.PI / 2, polar: Math.PI - 0.04 }
+      topo:     { az: -Math.PI / 2, polar: 0.0005 },
+      base:     { az: -Math.PI / 2, polar: Math.PI - 0.0005 }
     };
     const v = views[name];
     if (!v) return;

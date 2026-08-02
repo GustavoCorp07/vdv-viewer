@@ -21,7 +21,10 @@ const ICONS = {
   present: '<svg viewBox="0 0 24 24" fill="none" stroke="#6b46a8" stroke-width="1.7"><rect x="2.5" y="4" width="19" height="12.5" rx="1.5"/><path d="M12 16.5v3M8 20.5h8"/><path d="M10 8l4.5 2.3L10 12.6V8z" fill="#6b46a8" stroke="none"/></svg>',
   cloudopen: '<svg viewBox="0 0 24 24" fill="none" stroke="#1f6fc4" stroke-width="1.6"><path d="M7 17a4.2 4.2 0 0 1-.6-8.4 5.4 5.4 0 0 1 10.6 1A3.7 3.7 0 0 1 17 17H7z"/><path d="M12 13.5v-3M10.2 12l1.8-1.8L13.8 12" stroke-width="1.5"/></svg>',
   cloudsave: '<svg viewBox="0 0 24 24" fill="none" stroke="#2c7a4b" stroke-width="1.6"><path d="M7 16a4.2 4.2 0 0 1-.6-8.4 5.4 5.4 0 0 1 10.6 1A3.7 3.7 0 0 1 17 16H7z"/><path d="M12 12v7M9.8 16.8L12 19l2.2-2.2" stroke-width="1.5"/></svg>',
-  assembly: '<svg viewBox="0 0 24 24" fill="none" stroke="#1f6fc4" stroke-width="1.6"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9L12 3z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9M8 5.7l8 4.5"/></svg>'
+  assembly: '<svg viewBox="0 0 24 24" fill="none" stroke="#1f6fc4" stroke-width="1.6"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9L12 3z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9M8 5.7l8 4.5"/></svg>',
+  tex: '<svg viewBox="0 0 24 24" fill="none" stroke="#8a5a2b" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9c4-2.5 7 2.5 11 0s7 0 7 0M3 15c4-2.5 7 2.5 11 0s7 0 7 0" opacity="0.8"/></svg>',
+  render: '<svg viewBox="0 0 24 24" fill="none" stroke="#b3541e" stroke-width="1.6"><circle cx="12" cy="12" r="8.6"/><circle cx="12" cy="12" r="3.4" fill="#b3541e" fill-opacity="0.25"/><path d="M12 3.4v3M12 17.6v3M3.4 12h3M17.6 12h3"/></svg>',
+  manual: '<svg viewBox="0 0 24 24" fill="none" stroke="#2c7a4b" stroke-width="1.6"><path d="M4 4.5h6.5a2 2 0 0 1 2 2v13a2 2 0 0 0-2-2H4v-13z"/><path d="M20 4.5h-6.5a2 2 0 0 0-2 2v13a2 2 0 0 1 2-2H20v-13z"/><path d="M6.5 8h3M6.5 11h3M14.5 8h3M14.5 11h3"/></svg>'
 };
 
 const EYE_ON =
@@ -69,8 +72,12 @@ export class UI {
         buttons: [
           { id: 'props', icon: 'props', label: 'Proprie-\ndades', title: 'Modo propriedades: clique numa peça para ver os dados', needsModel: true, mode: 'properties' },
           { id: 'move', icon: 'move', label: 'Mover', title: 'Mover componentes nos eixos X, Y e Z', needsModel: true, mode: 'move' },
-          { id: 'measure', icon: 'measure', label: 'Medir', title: 'Medir distância entre dois pontos (mm)', needsModel: true, mode: 'measure' },
-          { id: 'explode', icon: 'explode', label: 'Explosão\nIA', title: 'Explosão automática inteligente com câmera cinematográfica', needsModel: true, onClick: () => app.explode.play() }
+          { id: 'measure', icon: 'measure', label: 'Medir', title: 'Medição profissional: vértices, arestas, faces, distâncias e ângulos', needsModel: true, mode: 'measure' },
+          { id: 'boxsel', icon: 'assembly', label: 'Criar\nmontagem', title: 'Arraste um retângulo em volta dos componentes para agrupá-los', needsModel: true, mode: 'boxselect' },
+          { id: 'texture', icon: 'tex', label: 'Textura', title: 'Aplicar texturas MDF (biblioteca com busca)', needsModel: true, onClick: () => app.texture.toggle() },
+          { id: 'render', icon: 'render', label: 'Renderi-\nzar', title: 'Renderização ultra-realista + foto e vídeo 4K', needsModel: true, onClick: () => app.render.open() },
+          { id: 'explode', icon: 'explode', label: 'Explosão\nIA', title: 'Explosão automática inteligente com câmera cinematográfica', needsModel: true, onClick: () => app.explode.play() },
+          { id: 'manual', icon: 'manual', label: 'Manual de\nmontagem', title: 'Passo a passo interativo de montagem com ferragens por etapa', needsModel: true, onClick: () => app.manual.open() }
         ]
       },
       {
@@ -109,6 +116,7 @@ export class UI {
           this.modeButtons[b.mode] = el;
         } else {
           el.addEventListener('click', b.onClick);
+          if (b.id === 'texture') this.modeButtons.texture = el;
         }
         if (b.toggle) this.toggleButtons[b.id] = el;
         if (b.needsModel) el.dataset.needsModel = '1';

@@ -8,8 +8,10 @@ import * as THREE from 'three';
 
 const MIN_DIST = 5;        // mm
 const MAX_DIST = 500000;   // mm
-const POLAR_MIN = 0.02;
-const POLAR_MAX = Math.PI - 0.02;
+// limite fino o bastante para vistas Topo/Base EXATAS (0,03° é invisível),
+// mas ainda evita a singularidade matemática do polo
+const POLAR_MIN = 0.0005;
+const POLAR_MAX = Math.PI - 0.0005;
 
 export class CadControls {
   /**

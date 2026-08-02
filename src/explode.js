@@ -1,21 +1,25 @@
 // ============================================================
-// Cinemática de Explosão Automática Inteligente (IA) — v2
+// Cinemática de Explosão Automática Inteligente (IA) — v3
 // ------------------------------------------------------------
-// Estilo "manual de montagem profissional": os componentes saem
-// UM DE CADA VEZ, devagar, com separações generosas que deixam a
-// montagem óbvia. O planejador continua garantindo caminho livre
-// (varredura AABB + ondas + efeito telescópio), mas a linha do
-// tempo é estritamente sequencial:
-//   peça 1 → pausa → peça 2 → pausa → …
-// A câmera acompanha: enquadra a cena crescente, gira devagar e
-// se alinha suavemente para que o movimento de cada peça fique
-// visível (movimento em X/Y é mostrado de lado, nunca "de frente").
-// A peça ativa pulsa em laranja e o HUD mostra o nome e o passo.
+// Sequencial (uma unidade por vez) com três avanços de engenharia:
+//
+// 1. FERRAGENS PRIMEIRO: parafusos/cavilhas/minifix são detectados
+//    automaticamente (nome + proporções: seção pequena e alongada) e
+//    saem ANTES das peças, deslizando ao longo do próprio eixo para
+//    fora da peça-hospedeira, sem colisão.
+//
+// 2. COLISÃO AVANÇADA: cada unidade avalia as 6 direções do mundo,
+//    com varredura AABB contra as peças restantes E contra os destinos
+//    já ocupados; quando a "vaga" final está tomada, a peça faz um
+//    desvio em L (dogleg): sai do móvel e estaciona ao lado, em vaga
+//    comprovadamente livre. Nada atravessa nada.
+//
+// 3. MONTAGENS como blocos únicos (inalterado).
 // ============================================================
 import * as THREE from 'three';
 import { easeInOutCubic, clamp, lerp } from './utils.js';
 
-const EPS = 0.5; // mm — tolerância p/ peças encostadas
+const EPS = 0.5;
 const AXES = ['x', 'y', 'z'];
 
 function shrunk(box, out) {
@@ -40,6 +44,17 @@ const wrapPi = (a) => {
   return a;
 };
 
+/** Ferragem: nome sugestivo OU seção transversal pequena e corpo alongado. */
+function isHardwareComp(comp) {
+  const name = ((comp.baseName || comp.name) || '').toLowerCase();
+  if (/paraf|screw|cavilha|minifix|bucha|pino\b|dowel|bolt|porca|\bnut\b|dobradi|corredi|puxador|ferrag/.test(name)) {
+    return true;
+  }
+  const { c, l, e } = comp.dims;
+  const cross = Math.max(l, e);
+  return cross <= 24 && c <= 240 && c >= cross * 2.2;
+}
+
 export class ExplodeTool {
   constructor(app) {
     this.app = app;
@@ -56,7 +71,7 @@ export class ExplodeTool {
     this._activeEntry = null;
   }
 
-  // ---------------- Planejamento ----------------
+  // ================= Planejamento =================
   plan() {
     const comps = this.model.visibleComponents();
     this._entries = [];
@@ -65,24 +80,27 @@ export class ExplodeTool {
     const union = this.model.unionBox(true);
     const center = union.getCenter(new THREE.Vector3());
     const diag = union.getSize(new THREE.Vector3()).length();
-    // separação generosa: proporcional ao produto, nunca tímida
     const gap = clamp(diag * 0.28, 120, 800);
 
-    // Unidades: cada montagem = UM bloco (explode inteira, junta);
-    // peças soltas = unidades individuais.
+    // ---- Unidades: montagens = bloco; ferragens = unidade marcada ----
     const unitByAsm = new Map();
     const units = [];
     for (const comp of comps) {
       if (comp.assembly) {
         let u = unitByAsm.get(comp.assembly);
         if (!u) {
-          u = { name: '📦 ' + comp.assembly.name, comps: [] };
+          u = { name: '📦 ' + comp.assembly.name, comps: [], hardware: false };
           unitByAsm.set(comp.assembly, u);
           units.push(u);
         }
         u.comps.push(comp);
       } else {
-        units.push({ name: comp.name, comps: [comp] });
+        const hw = isHardwareComp(comp);
+        units.push({
+          name: (hw ? '🔩 ' : '') + comp.name,
+          comps: [comp],
+          hardware: hw
+        });
       }
     }
     if (units.length < 2) return false;
@@ -91,20 +109,45 @@ export class ExplodeTool {
       const box = new THREE.Box3();
       const tmp = new THREE.Box3();
       for (const c of u.comps) box.union(c.currentAABB(tmp));
-      // eixo "fino": peça única usa a OBB; montagem usa a própria caixa
-      let thin;
+      let thin, longAxis;
       if (u.comps.length === 1) {
         thin = u.comps[0].dims.axes[2];
+        longAxis = u.comps[0].dims.axes[0];
       } else {
         const size = box.getSize(new THREE.Vector3());
         const arr = [size.x, size.y, size.z];
-        const idx = arr.indexOf(Math.min(...arr));
         thin = new THREE.Vector3();
-        thin[AXES[idx]] = 1;
+        thin[AXES[arr.indexOf(Math.min(...arr))]] = 1;
+        longAxis = new THREE.Vector3();
+        longAxis[AXES[arr.indexOf(Math.max(...arr))]] = 1;
       }
-      return { unit: u, thin, box, dir: null, travel: 0, wave: -1 };
+      return {
+        unit: u, thin, longAxis, box,
+        dir: null, travel: 0,
+        dir2: null, travel2: 0,
+        wave: -1
+      };
     });
 
+    // Ferragens são planejadas SEPARADO: cada uma sai imediatamente antes
+    // da peça em que está presa (não no início, quando o móvel está cheio).
+    const panelItems = items.filter((it) => !it.unit.hardware);
+    const hwItems = items.filter((it) => it.unit.hardware);
+
+    // Painéis JÁ INTERPENETRADOS no projeto original (interferências de
+    // fábrica): separar-se deles é o próprio objetivo da explosão —
+    // não contam como bloqueio de caminho.
+    const tmpA = new THREE.Box3(), tmpB = new THREE.Box3();
+    for (const item of panelItems) {
+      item.hosts = new Set();
+      const probe = shrunk(item.box, tmpA).clone();
+      for (const other of panelItems) {
+        if (other === item) continue;
+        if (probe.intersectsBox(shrunk(other.box, tmpB))) item.hosts.add(other);
+      }
+    }
+
+    // ---- Candidatos de direção ----
     const candidatesFor = (item) => {
       const boxCenter = item.box.getCenter(new THREE.Vector3());
       const offset = boxCenter.clone().sub(center);
@@ -114,24 +157,22 @@ export class ExplodeTool {
           cands.push({ axisIdx, sign });
         }
       };
-      // 1) eixo da espessura (normal do painel), snapado ao eixo do mundo
       const thin = item.thin;
       const t = [Math.abs(thin.x), Math.abs(thin.y), Math.abs(thin.z)];
       const thinIdx = t.indexOf(Math.max(...t));
       if (t[thinIdx] > 0.8) {
-        const off = offset[AXES[thinIdx]];
-        const s = Math.abs(off) > 1e-3 ? Math.sign(off) : 1;
+        const s = Math.sign(offset[AXES[thinIdx]]) || 1;
         push(thinIdx, s);
         push(thinIdx, -s);
       }
-      // 2) eixos radiais por magnitude do afastamento do centro
+      // todas as 6 direções do mundo, priorizando o maior afastamento
       const order = [0, 1, 2].sort(
         (a, b) => Math.abs(offset[AXES[b]]) - Math.abs(offset[AXES[a]]));
       for (const idx of order) {
-        const off = offset[AXES[idx]];
-        push(idx, Math.abs(off) > 1e-3 ? Math.sign(off) : 1);
+        const s = Math.sign(offset[AXES[idx]]) || 1;
+        push(idx, s);
+        push(idx, -s);
       }
-      push(2, 1); // fallback: para cima
       return cands;
     };
 
@@ -150,24 +191,161 @@ export class ExplodeTool {
     };
 
     const tmpBox = new THREE.Box3();
+    const tmpBox2 = new THREE.Box3();
     const countBlockers = (item, cand, remaining) => {
       const travel = travelToClear(item.box, cand.axisIdx, cand.sign, union);
       sweptBox(item.box, cand.axisIdx, cand.sign, travel, tmpBox);
       let n = 0;
       for (const other of remaining) {
         if (other === item) continue;
-        if (tmpBox.intersectsBox(shrunk(other.box, new THREE.Box3()))) n++;
+        if (item.hosts && item.hosts.has(other)) continue; // desliza pelo hospedeiro
+        if (tmpBox.intersectsBox(shrunk(other.box, tmpBox2))) n++;
       }
       return { blockers: n, travel };
     };
 
-    // ondas gulosas (garantem caminho livre no momento da saída)
-    let remaining = [...items];
+    // ---- Estacionamento (dogleg): vaga final livre garantida ----
     const placedFinals = [];
+    const finalConflicts = (finalBox) => placedFinals.filter((pf) => {
+      const m = gap * 0.25;
+      return finalBox.min.x < pf.max.x + m && finalBox.max.x > pf.min.x - m &&
+             finalBox.min.y < pf.max.y + m && finalBox.max.y > pf.min.y - m &&
+             finalBox.min.z < pf.max.z + m && finalBox.max.z > pf.min.z - m;
+    });
+
+    /** Caminho reto de `box` transladando `travel` ao longo de d1 cruza
+     *  alguma vaga já ocupada? (varredura = união início∪fim, encolhida) */
+    const pathHitsFinals = (box, axisIdx, sign, travel) => {
+      const swept = new THREE.Box3();
+      sweptBox(box, axisIdx, sign, travel, swept);
+      return placedFinals.some((pf) => swept.intersectsBox(pf));
+    };
+
+    /**
+     * Tenta assentar a peça com garantia TOTAL de caminho livre:
+     *  A) pista livre até a vaga → direto;
+     *  B) pista bloqueada por vaga ocupada → estaciona ANTES dela (se já
+     *     estiver fora do móvel) — efeito telescópio correto;
+     *  C) vaga tomada mas pista livre → dogleg: sai reto e desvia de lado
+     *     até uma vaga comprovadamente livre (2º trecho também varrido).
+     */
+    const trySettle = (item, cand, travelClear) => {
+      const ax = AXES[cand.axisIdx];
+      const d1 = new THREE.Vector3();
+      d1[ax] = cand.sign;
+      const lead = cand.sign > 0 ? item.box.max[ax] : -item.box.min[ax];
+
+      // vagas ocupadas na MESMA pista, à frente
+      const lane = placedFinals
+        .filter((pf) => overlapsLateral(item.box, pf, cand.axisIdx))
+        .map((pf) => ({
+          pf,
+          room: (cand.sign > 0 ? pf.min[ax] : -pf.max[ax]) - lead
+        }))
+        .filter((l) => l.room > -EPS)
+        .sort((a, b) => a.room - b.room);
+
+      const outsideOk = (finalBox) => {
+        // precisa ter saído do móvel (não intersectar a união original)
+        const probe = finalBox.clone();
+        probe.min.addScalar(EPS); probe.max.subScalar(EPS);
+        return !probe.intersectsBox(union);
+      };
+
+      const commit = (travel, d2, travel2, finalBox) => {
+        item.dir = d1; item.travel = travel;
+        item.dir2 = d2; item.travel2 = travel2 || 0;
+        placedFinals.push(finalBox);
+        return true;
+      };
+
+      // A) pista totalmente livre até a distância de saída
+      if (!lane.length || lane[0].room - gap * 0.35 >= travelClear) {
+        const final1 = item.box.clone().translate(
+          d1.clone().multiplyScalar(travelClear));
+        if (!finalConflicts(final1).length &&
+            !pathHitsFinals(item.box, cand.axisIdx, cand.sign, travelClear)) {
+          return commit(travelClear, null, 0, final1);
+        }
+        // vaga tomada (conflito lateral) → C) dogleg
+        if (!pathHitsFinals(item.box, cand.axisIdx, cand.sign, travelClear)) {
+          const size = item.box.getSize(new THREE.Vector3());
+          const perpAxes = [0, 1, 2].filter((i) => i !== cand.axisIdx);
+          for (let ring = 1; ring <= 8; ring++) {
+            for (const pi of perpAxes) {
+              for (const ps of [1, -1]) {
+                const pax = AXES[pi];
+                const shift = ring * (size[pax] + gap * 0.7);
+                const d2 = new THREE.Vector3();
+                d2[pax] = ps;
+                const final2 = final1.clone().translate(
+                  d2.clone().multiplyScalar(shift));
+                if (finalConflicts(final2).length) continue;
+                const swept2 = final1.clone().union(final2);
+                swept2.min.addScalar(EPS); swept2.max.subScalar(EPS);
+                if (placedFinals.some((pf) => swept2.intersectsBox(pf))) continue;
+                if (swept2.intersectsBox(union)) continue;
+                return commit(travelClear, d2, shift, final2);
+              }
+            }
+          }
+        }
+        return false;
+      }
+
+      // B) pista bloqueada antes da saída → estaciona antes do bloqueio,
+      //    desde que a posição já esteja fora do móvel
+      const shortTravel = lane[0].room - gap * 0.35;
+      if (shortTravel > 0) {
+        const finalS = item.box.clone().translate(
+          d1.clone().multiplyScalar(shortTravel));
+        if (outsideOk(finalS) && !finalConflicts(finalS).length &&
+            !pathHitsFinals(item.box, cand.axisIdx, cand.sign, shortTravel)) {
+          return commit(shortTravel, null, 0, finalS);
+        }
+      }
+      return false;
+    };
+
+    /** Assenta usando SÓ candidatos sem bloqueio (allowBlocked=false) ou,
+     *  em travamento real, os de menor bloqueio (allowBlocked=true). */
+    const settlePlacement = (item, allowBlocked) => {
+      for (const ev of item.evals) {
+        if (!allowBlocked && ev.blockers > 0) break;
+        if (allowBlocked && ev.blockers > item.best.blockers) break;
+        if (trySettle(item, ev.cand, ev.travel)) return true;
+      }
+      return false;
+    };
+
+    /** Só para travamento absoluto: pista menos disputada, além de todas
+     *  as vagas — pode cruzar geometria (avisado no console). */
+    const forceCommit = (item) => {
+      const ev = item.evals[0];
+      const ax = AXES[ev.cand.axisIdx];
+      const size = item.box.getSize(new THREE.Vector3());
+      const d1 = new THREE.Vector3();
+      d1[ax] = ev.cand.sign;
+      let travel = ev.travel;
+      for (const pf of placedFinals) {
+        if (!overlapsLateral(item.box, pf, ev.cand.axisIdx)) continue;
+        const beyond = ev.cand.sign > 0
+          ? pf.max[ax] - item.box.min[ax]
+          : item.box.max[ax] - pf.min[ax];
+        travel = Math.max(travel, beyond + size[ax] + gap * 0.6);
+      }
+      item.dir = d1; item.travel = travel;
+      item.dir2 = null; item.travel2 = 0;
+      placedFinals.push(item.box.clone().translate(
+        d1.clone().multiplyScalar(travel)));
+      console.warn('[Explosão] assentamento forçado para', item.unit.name);
+    };
+
+    // ---- Ondas gulosas dos PAINÉIS: caminho livre garantido ----
+    let remaining = [...panelItems];
     let waveIdx = 0;
     let guard = 0;
-
-    while (remaining.length && guard++ < items.length + 10) {
+    while (remaining.length && guard++ < panelItems.length + 10) {
       for (const item of remaining) {
         item.evals = candidatesFor(item).map((cand) => ({
           cand, ...countBlockers(item, cand, remaining)
@@ -175,90 +353,194 @@ export class ExplodeTool {
         item.evals.sort((a, b) => a.blockers - b.blockers);
         item.best = item.evals[0];
       }
+      let forced = false;
       let wave = remaining.filter((it) => it.best.blockers === 0);
       if (!wave.length) {
+        forced = true;
         wave = [remaining.reduce((a, b) => (a.best.blockers <= b.best.blockers ? a : b))];
       }
-
+      const placed = [];
       for (const item of wave) {
-        let placedOk = false;
-        for (const ev of item.evals) {
-          const { cand } = ev;
-          let travel = ev.travel;
-          const ax = AXES[cand.axisIdx];
-          let feasible = true;
-          for (const pf of placedFinals) {
-            if (!overlapsLateral(item.box, pf, cand.axisIdx)) continue;
-            const room = cand.sign > 0
-              ? pf.min[ax] - item.box.max[ax]
-              : item.box.min[ax] - pf.max[ax];
-            if (room <= 0) continue;
-            const allowed = room - gap * 0.45;
-            if (allowed < ev.travel * 0.3) { feasible = false; break; }
-            travel = Math.min(travel, allowed);
-          }
-          if (!feasible) continue;
-          item.dir = new THREE.Vector3();
-          item.dir[ax] = cand.sign;
-          item.axisIdx = cand.axisIdx;
-          item.travel = travel;
-          placedOk = true;
-          break;
+        if (settlePlacement(item, forced)) {
+          item.wave = waveIdx;
+          placed.push(item);
         }
-        if (!placedOk) {
-          const ev = item.evals[0];
-          const ax = AXES[ev.cand.axisIdx];
-          item.dir = new THREE.Vector3();
-          item.dir[ax] = ev.cand.sign;
-          item.axisIdx = ev.cand.axisIdx;
-          item.travel = ev.travel * 0.35;
-        }
-        item.wave = waveIdx;
-        placedFinals.push(item.box.clone().translate(
-          item.dir.clone().multiplyScalar(item.travel)));
+        // sem vaga segura nesta onda → adia (o cenário muda quando
+        // mais peças saem; vagas e pistas se reorganizam)
       }
-
-      remaining = remaining.filter((it) => !wave.includes(it));
+      if (!placed.length) {
+        // nada assentou: garante progresso no menor mal
+        const item = wave[0];
+        forceCommit(item);
+        item.wave = waveIdx;
+        placed.push(item);
+      }
+      remaining = remaining.filter((it) => !placed.includes(it));
       waveIdx++;
     }
 
-    // ------- Sequência didática: UMA peça por vez -------
-    // Dentro de cada onda, agrupa por direção (movimentos parecidos em
-    // sequência = narrativa clara) e vai do mais afastado ao mais próximo.
-    items.sort((a, b) => {
+    // ---- Sequência didática dos painéis ----
+    const dirKey = (it) => {
+      if (!it.dir) return 0;
+      const axis = it.dir.x !== 0 ? 0 : it.dir.y !== 0 ? 2 : 4;
+      const sign = (it.dir.x + it.dir.y + it.dir.z) > 0 ? 0 : 1;
+      return axis + sign;
+    };
+    panelItems.sort((a, b) => {
       if (a.wave !== b.wave) return a.wave - b.wave;
-      const dirKeyA = a.axisIdx * 2 + (a.dir[AXES[a.axisIdx]] > 0 ? 0 : 1);
-      const dirKeyB = b.axisIdx * 2 + (b.dir[AXES[b.axisIdx]] > 0 ? 0 : 1);
-      if (dirKeyA !== dirKeyB) return dirKeyA - dirKeyB;
+      if (dirKey(a) !== dirKey(b)) return dirKey(a) - dirKey(b);
       const da = a.box.getCenter(new THREE.Vector3()).distanceTo(center);
       const db = b.box.getCenter(new THREE.Vector3()).distanceTo(center);
       return db - da;
     });
+    panelItems.forEach((p, i) => { p.seq = i; });
 
-    // ritmo: adapta à quantidade de peças (sempre 1 por vez)
-    const n = items.length;
-    const moveDur = n <= 12 ? 1.8 : n <= 24 ? 1.5 : n <= 40 ? 1.2 : 1.0;
-    const pauseDur = n <= 12 ? 0.55 : n <= 24 ? 0.4 : 0.28;
-    items.forEach((item, k) => {
+    // corredores que cada painel ainda vai varrer (trecho reto + dogleg)
+    for (const p of panelItems) {
+      p.corridors = [];
+      if (!p.dir) continue;
+      const ai = p.dir.x !== 0 ? 0 : p.dir.y !== 0 ? 1 : 2;
+      const sg = p.dir[AXES[ai]] > 0 ? 1 : -1;
+      const s1 = new THREE.Box3();
+      sweptBox(p.box, ai, sg, p.travel, s1);
+      p.corridors.push(s1.clone());
+      if (p.dir2) {
+        const f1 = p.box.clone().translate(p.dir.clone().multiplyScalar(p.travel));
+        const f2 = f1.clone().translate(p.dir2.clone().multiplyScalar(p.travel2));
+        const s2 = f1.union(f2);
+        s2.min.addScalar(EPS); s2.max.subScalar(EPS);
+        p.corridors.push(s2);
+      }
+    }
+
+    // ---- Ferragens: saem A PARTIR da peça em que estão presas ----
+    // âncora = hospedeiro que sai primeiro; a ferragem sai logo antes dele,
+    // deslizando pelo próprio eixo só o bastante para liberar o conjunto,
+    // com o caminho conferido contra as peças AINDA presentes naquele
+    // momento e contra os corredores que os painéis vão varrer depois.
+    const hwFinals = [];
+    for (const hw of hwItems) {
+      const probe = hw.box.clone().expandByScalar(2);
+      hw.hostPanels = panelItems.filter((p) => probe.intersectsBox(p.box));
+      hw.anchor = hw.hostPanels.length
+        ? hw.hostPanels.reduce((a, b) => (a.seq <= b.seq ? a : b))
+        : null;
+      hw.hosts = new Set(hw.hostPanels);
+      hw.wave = hw.anchor ? hw.anchor.wave : 0;
+
+      const hostUnion = hw.box.clone();
+      for (const p of hw.hostPanels) hostUnion.union(p.box);
+
+      const la = hw.longAxis;
+      const t = [Math.abs(la.x), Math.abs(la.y), Math.abs(la.z)];
+      const ai = t.indexOf(Math.max(...t));
+      const ax = AXES[ai];
+      const anchorSeq = hw.anchor ? hw.anchor.seq : 0;
+      const present = panelItems.filter(
+        (p) => p.seq >= anchorSeq && !hw.hosts.has(p));
+
+      const evalSign = (s) => {
+        const travel0 = (s > 0
+          ? hostUnion.max[ax] - hw.box.min[ax]
+          : hw.box.max[ax] - hostUnion.min[ax]) + gap * 0.45;
+        const sw = new THREE.Box3();
+        sweptBox(hw.box, ai, s, travel0, sw);
+        let blockers = 0;
+        for (const p of present) {
+          if (sw.intersectsBox(shrunk(p.box, tmpA))) blockers++;
+        }
+        return { s, travel0, blockers };
+      };
+      const evA = evalSign(1), evB = evalSign(-1);
+      const ev = evA.blockers !== evB.blockers
+        ? (evA.blockers < evB.blockers ? evA : evB)
+        : (evA.travel0 <= evB.travel0 ? evA : evB); // lado da cabeça (saída curta)
+
+      const d1 = new THREE.Vector3();
+      d1[ax] = ev.s;
+      let travel = ev.travel0;
+      // afasta até sair dos corredores futuros e das outras ferragens
+      const sizes = hw.box.getSize(new THREE.Vector3());
+      const step = Math.max(sizes[ax], 30) + gap * 0.25;
+      for (let k = 0; k < 8; k++) {
+        const fin = hw.box.clone().translate(d1.clone().multiplyScalar(travel));
+        const inCorridor =
+          present.some((p) => p.corridors.some((c) => c.intersectsBox(fin))) ||
+          hwFinals.some((f) => f.intersectsBox(fin));
+        if (!inCorridor) break;
+        travel += step;
+      }
+      hw.dir = d1;
+      hw.travel = travel;
+      hw.dir2 = null;
+      hw.travel2 = 0;
+      hwFinals.push(hw.box.clone().translate(d1.clone().multiplyScalar(travel)));
+    }
+
+    // ---- Tece a sequência: ferragens imediatamente ANTES do seu painel ----
+    const hwByAnchor = new Map();
+    const looseHw = [];
+    for (const hw of hwItems) {
+      if (!hw.anchor) { looseHw.push(hw); continue; }
+      if (!hwByAnchor.has(hw.anchor)) hwByAnchor.set(hw.anchor, []);
+      hwByAnchor.get(hw.anchor).push(hw);
+    }
+    const posKey = (h) => {
+      const c = h.box.getCenter(new THREE.Vector3());
+      return c.x * 7 + c.y * 3 + c.z;
+    };
+    const seq = [...looseHw.sort((a, b) => posKey(a) - posKey(b))];
+    for (const p of panelItems) {
+      const list = (hwByAnchor.get(p) || [])
+        .sort((a, b) => dirKey(a) - dirKey(b) || posKey(a) - posKey(b));
+      seq.push(...list, p);
+    }
+
+    // dados para o Manual de Montagem (ordem inversa = montagem)
+    this.manualData = {
+      panels: panelItems,
+      fixings: (p) => hwByAnchor.get(p) || [],
+      loose: looseHw
+    };
+
+    // ---- Ritmo: ferragens rápidas, peças pausadas ----
+    const nPanels = panelItems.length;
+    const moveDur = nPanels <= 12 ? 1.8 : nPanels <= 24 ? 1.5 : nPanels <= 40 ? 1.2 : 1.0;
+    const pauseDur = nPanels <= 12 ? 0.55 : nPanels <= 24 ? 0.4 : 0.28;
+    const hwDur = 0.85, hwPause = 0.18;
+    let tCur = 0.6;
+    seq.forEach((item, k) => {
       item.order = k;
-      item.start = 0.6 + k * (moveDur + pauseDur); // 0.6s de "respiro" inicial
-      item.dur = moveDur;
+      item.start = tCur;
+      item.dur = item.unit.hardware ? hwDur : moveDur;
+      tCur += item.dur + (item.unit.hardware ? hwPause : pauseDur);
     });
-    this.duration = 0.6 + n * (moveDur + pauseDur) + 0.6;
-    this._entries = items;
+    this.duration = tCur + 0.6;
+    this._entries = seq;
     this.planned = true;
     return true;
   }
 
-  // ---------------- Aplicação de offsets ----------------
+  // ================= Aplicação de offsets =================
+  _offsetAt(item, u) {
+    const eased = easeInOutCubic(u);
+    const off = item.dir.clone().multiplyScalar(item.travel *
+      (item.dir2 ? easeInOutCubic(clamp(u / 0.62, 0, 1)) : eased));
+    if (item.dir2) {
+      const u2 = clamp((u - 0.62) / 0.38, 0, 1);
+      off.addScaledVector(item.dir2, item.travel2 * easeInOutCubic(u2));
+    }
+    return off;
+  }
+
   _applyTime(tSec) {
     this._activeEntry = null;
     for (const item of this._entries) {
       const u = clamp((tSec - item.start) / item.dur, 0, 1);
       if (u > 0 && u < 1) this._activeEntry = item;
-      const eased = easeInOutCubic(u);
+      const off = this._offsetAt(item, u);
       for (const c of item.unit.comps) {
-        c.explodeOffset.copy(item.dir).multiplyScalar(item.travel * eased);
+        c.explodeOffset.copy(off);
         c.applyTransform();
       }
     }
@@ -272,10 +554,11 @@ export class ExplodeTool {
     this._syncSlider();
   }
 
-  // ---------------- Reprodução cinematográfica ----------------
+  // ================= Reprodução cinematográfica =================
   play() {
     if (this.playing) return;
     if (!this.model.hasModel) return;
+    if (this.app.manual && this.app.manual.active) this.app.manual.close();
     this.app.setMode('select');
     this.collapseInstant();
     if (!this.plan()) {
@@ -286,7 +569,7 @@ export class ExplodeTool {
     this.viewer.controls.enabled = false;
     this.showHud(true);
     this.app.setStatus(
-      'Explosão IA — cada componente sai individualmente; ajuste a velocidade no controle abaixo');
+      'Explosão IA — ferragens saem primeiro; ajuste a velocidade no controle abaixo');
 
     const ctrl = this.viewer.controls;
     const s0 = ctrl.getSpherical();
@@ -310,7 +593,6 @@ export class ExplodeTool {
 
       const active = this._activeEntry;
 
-      // ---- destaque pulsante da unidade ativa ----
       if (lastActive && lastActive !== active) {
         for (const c of lastActive.unit.comps) this.viewer._applyEmissive(c);
       }
@@ -323,7 +605,6 @@ export class ExplodeTool {
       }
       lastActive = active;
 
-      // ---- direção da câmera (takes): cena inteira como referência ----
       boxTmp.makeEmpty();
       const tmp = new THREE.Box3();
       for (const item of this._entries) {
@@ -337,23 +618,18 @@ export class ExplodeTool {
 
       let focus, wantDist, polarGoal;
       if (active) {
-        // TAKE FECHADO: enquadra a peça + o encaixe de onde ela sai + o
-        // destino — perto o bastante para mostrar o detalhe da montagem
-        const localBox = active.box.clone() // encaixe original ("buraco")
-          .union(active.box.clone().translate(
-            active.dir.clone().multiplyScalar(active.travel)));
+        const finalOff = this._offsetAt(active, 1);
+        const localBox = active.box.clone()
+          .union(active.box.clone().translate(finalOff));
         const tmpU = new THREE.Box3();
         for (const c of active.unit.comps) localBox.union(c.currentAABB(tmpU));
         localBox.expandByScalar(active.travel * 0.10 + 50);
         focus = localBox.getCenter(new THREE.Vector3());
-        // olhar puxado ao encaixe: é ali que a montagem "acontece"
         focus.lerp(active.box.getCenter(new THREE.Vector3()), 0.30);
         wantDist = clamp(this.viewer.fitDistanceFor(localBox) * 1.12,
           fitScene * 0.42, fitScene * 1.02);
-        // elevação por direção: movimentos verticais pedem vista mais alta
-        polarGoal = active.axisIdx === 2 ? 1.02 : 0.88;
+        polarGoal = active.dir && Math.abs(active.dir.z) > 0.5 ? 1.02 : 0.88;
       } else {
-        // PAUSA: reabre o plano geral e ANTECIPA a próxima peça
         focus = boxTmp.isEmpty()
           ? this._smTarget.clone() : boxTmp.getCenter(new THREE.Vector3());
         wantDist = fitScene;
@@ -375,21 +651,18 @@ export class ExplodeTool {
       this._smTarget.lerp(focus, kT);
       this._smDist = lerp(this._smDist, wantDist, kD);
 
-      // ---- azimute: gira devagar e se alinha para VER o movimento ----
-      if (active && active.axisIdx !== 2) {
-        // movimento em X é visto de ±Y (az ±π/2); em Y, de ±X (az 0/π)
-        const desired = active.axisIdx === 0
-          ? [-Math.PI / 2, Math.PI / 2] : [0, Math.PI];
+      if (active && active.dir && Math.abs(active.dir.z) < 0.5) {
+        const axisIdx = Math.abs(active.dir.x) > 0.5 ? 0 : 1;
+        const desired = axisIdx === 0 ? [-Math.PI / 2, Math.PI / 2] : [0, Math.PI];
         let goal = desired[0];
         for (const d of desired) {
           if (Math.abs(wrapPi(d - this._az)) < Math.abs(wrapPi(goal - this._az))) goal = d;
         }
-        // vista 3/4: desloca ~0,5 rad do eixo para dar profundidade ao take
         goal += 0.5 * Math.sign(wrapPi(this._az - goal) || 1);
         this._az += wrapPi(goal - this._az) * Math.min(1, dt * 1.5);
-        this._az += 0.02 * dt; // vida
+        this._az += 0.02 * dt;
       } else {
-        this._az += 0.13 * dt; // deriva suave entre peças / movimentos verticais
+        this._az += 0.13 * dt;
       }
 
       const kP = 1 - Math.exp(-dt * 1.4);
@@ -419,7 +692,6 @@ export class ExplodeTool {
     for (const item of this._entries) {
       for (const c of item.unit.comps) this.viewer._applyEmissive(c);
     }
-    // plano geral final: reenquadra o produto explodido inteiro
     this.viewer.fitBox(this.model.unionBox(), true);
     this._syncSlider();
     this.showHud(true);
@@ -463,7 +735,7 @@ export class ExplodeTool {
     this.app.setStatusDefault();
   }
 
-  // ---------------- HUD ----------------
+  // ================= HUD =================
   showHud(show) {
     if (!show) { this.hud.classList.add('hidden'); return; }
     if (!this.hud.dataset.built) {
@@ -484,7 +756,6 @@ export class ExplodeTool {
       slider.type = 'range';
       slider.min = '0'; slider.max = '1000'; slider.value = '0';
       slider.addEventListener('input', () => {
-        // captura ANTES do skip (que sincroniza o slider para 100%)
         const v = parseInt(slider.value, 10) / 1000;
         if (this.playing) this.skip();
         this.setFactor(v);
@@ -530,9 +801,8 @@ export class ExplodeTool {
     if (active) {
       this._partLabel.textContent = `▶ ${active.order + 1}/${n} — ${active.unit.name}`;
     } else if (this.factor >= 1) {
-      this._partLabel.textContent = `✓ ${n} componentes explodidos`;
+      this._partLabel.textContent = `✓ ${n} unidades explodidas`;
     } else if (tSec > 0.01) {
-      // entre peças: mostra a próxima
       const next = this._entries.find((it) => it.start >= tSec);
       this._partLabel.textContent = next
         ? `${next.order + 1}/${n} — ${next.unit.name}` : '';

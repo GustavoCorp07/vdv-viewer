@@ -8,6 +8,9 @@ import { PropertiesPanel } from './properties.js';
 import { MoveTool } from './movetool.js';
 import { ExplodeTool } from './explode.js';
 import { MeasureTool } from './measure.js';
+import { TextureTool } from './texture.js';
+import { RenderTool } from './render.js';
+import { ManualTool } from './manual.js';
 import { BomTool } from './bom.js';
 import { UI } from './ui.js';
 import { Auth } from './auth.js';
@@ -19,7 +22,12 @@ const STATUS_BY_MODE = {
     'Clique: selecionar • Botão do meio: orbitar • Ctrl+meio: pan • Shift+meio ou scroll: zoom • F: enquadrar',
   properties: 'Modo Propriedades — clique em um componente para ver todos os dados',
   move: 'Modo Mover — clique em um componente e arraste as setas do gizmo • Ctrl+Z desfaz',
-  measure: 'Modo Medir — clique em dois pontos da geometria para medir em mm'
+  measure:
+    'Modo Medir — aproxime o cursor de vértices, arestas e faces (o alvo gruda) e clique • Esc limpa',
+  boxselect:
+    'Criar montagem — clique e ARRASTE um retângulo em volta dos componentes desejados • Esc cancela',
+  texture:
+    'Modo Textura — escolha uma textura no painel e clique nos componentes para aplicar • botão direito remove'
 };
 
 class App {
@@ -32,6 +40,9 @@ class App {
     this.move = new MoveTool(this);
     this.explode = new ExplodeTool(this);
     this.measure = new MeasureTool(this);
+    this.texture = new TextureTool(this);
+    this.render = new RenderTool(this);
+    this.manual = new ManualTool(this);
     this.bom = new BomTool(this);
 
     this.mode = 'select';
@@ -122,7 +133,8 @@ class App {
       assemblies: this.model.assemblies.map((a) => ({
         name: a.name,
         members: a.members.map(idx).filter((i) => i >= 0)
-      }))
+      })),
+      textures: this.texture.captureState()
     };
   }
 
@@ -153,6 +165,7 @@ class App {
       const members = (a.members || []).map((i) => comps[i]).filter(Boolean);
       if (members.length >= 2) this.model.createAssembly(a.name, members);
     }
+    if (state.textures) this.texture.applyState(state.textures);
     this.layers.refreshBar();
     this.model.applyVisibilityAll();
     this.ui.refreshTree();
@@ -166,9 +179,20 @@ class App {
 
     if (prev === 'move') this.move.disable();
     if (prev === 'measure') this.measure.clear();
+    if (prev === 'texture') this.texture.disable();
+    if (prev === 'boxselect') {
+      document.getElementById('box-select-rect').classList.add('hidden');
+      this._boxSel = null;
+      this.viewer.container.style.cursor = '';
+    }
     if (prev === 'properties' && mode !== 'properties') this.props.hide();
 
     if (mode === 'move') this.move.enable();
+    if (mode === 'texture') this.texture.enable();
+    if (mode === 'boxselect') {
+      this.select(null);
+      this.viewer.container.style.cursor = 'crosshair';
+    }
 
     this.ui.refreshModeButtons();
     this.setStatusDefault();
@@ -355,6 +379,11 @@ class App {
         if (hit) this.layers.captureToggle(hit.comp);
         return;
       }
+      if (this.mode === 'boxselect') return;
+      if (this.mode === 'texture') {
+        if (hit) this.texture.apply(hit.comp);
+        return;
+      }
       if (this.mode === 'measure') {
         this.measure.onClick(hit);
         return;
@@ -372,7 +401,48 @@ class App {
       if (!this.model.hasModel || this.explode.playing) return;
       if (this.layers.capture) return;
       const hit = this.viewer.pickComponent(e);
+      if (this.mode === 'texture') {
+        if (hit) this.texture.remove(hit.comp);
+        return;
+      }
       if (hit) this.showContextMenu(e.clientX, e.clientY, hit.comp);
+    });
+
+    // ---- seleção retangular (Criar montagem por arrasto) ----
+    const rectEl = document.getElementById('box-select-rect');
+    this._boxSel = null;
+    dom.addEventListener('pointerdown', (e) => {
+      if (this.mode !== 'boxselect' || e.button !== 0) return;
+      e.preventDefault();
+      this._boxSel = { x0: e.clientX, y0: e.clientY, x1: e.clientX, y1: e.clientY };
+      this._drawBoxSel(rectEl);
+    });
+    window.addEventListener('pointermove', (e) => {
+      if (!this._boxSel) return;
+      this._boxSel.x1 = e.clientX;
+      this._boxSel.y1 = e.clientY;
+      this._drawBoxSel(rectEl);
+    });
+    window.addEventListener('pointerup', async (e) => {
+      if (!this._boxSel || e.button !== 0) return;
+      const b = this._boxSel;
+      this._boxSel = null;
+      rectEl.classList.add('hidden');
+      const w = Math.abs(b.x1 - b.x0), h = Math.abs(b.y1 - b.y0);
+      if (w < 8 && h < 8) return; // clique sem arrasto
+      const picked = this._compsInScreenRect(
+        Math.min(b.x0, b.x1), Math.min(b.y0, b.y1),
+        Math.max(b.x0, b.x1), Math.max(b.y0, b.y1));
+      if (picked.length < 2) {
+        this.ui.toast('Envolva pelo menos 2 componentes no retângulo.', 'warn');
+        return;
+      }
+      this.selectedComps = new Set(picked);
+      this.selected = picked[0];
+      this.selectedAssembly = null;
+      this._afterSelectionChanged();
+      this.setMode('select');
+      await this.createAssemblyFromSelection();
     });
 
     // arrastar e soltar arquivo
@@ -393,17 +463,63 @@ class App {
     });
   }
 
+  _drawBoxSel(rectEl) {
+    const b = this._boxSel;
+    const wrap = this.viewer.container.getBoundingClientRect();
+    rectEl.classList.remove('hidden');
+    rectEl.style.left = Math.min(b.x0, b.x1) - wrap.left + 'px';
+    rectEl.style.top = Math.min(b.y0, b.y1) - wrap.top + 'px';
+    rectEl.style.width = Math.abs(b.x1 - b.x0) + 'px';
+    rectEl.style.height = Math.abs(b.y1 - b.y0) + 'px';
+  }
+
+  /** Componentes visíveis cuja projeção intersecta o retângulo (coords de tela). */
+  _compsInScreenRect(minX, minY, maxX, maxY) {
+    const cam = this.viewer.camera;
+    const rect = this.viewer.renderer.domElement.getBoundingClientRect();
+    const out = [];
+    const v = this.viewer.controls.target.clone();
+    for (const c of this.model.components) {
+      if (!c.group.visible) continue;
+      const b = c.currentAABB();
+      let sMinX = Infinity, sMinY = Infinity, sMaxX = -Infinity, sMaxY = -Infinity;
+      let anyFront = false;
+      for (let i = 0; i < 8; i++) {
+        v.set(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y,
+          i & 4 ? b.max.z : b.min.z).project(cam);
+        if (v.z < 1) anyFront = true;
+        const sx = rect.left + (v.x + 1) / 2 * rect.width;
+        const sy = rect.top + (-v.y + 1) / 2 * rect.height;
+        sMinX = Math.min(sMinX, sx); sMaxX = Math.max(sMaxX, sx);
+        sMinY = Math.min(sMinY, sy); sMaxY = Math.max(sMaxY, sy);
+      }
+      if (anyFront && sMaxX >= minX && sMinX <= maxX &&
+          sMaxY >= minY && sMinY <= maxY) {
+        out.push(c);
+      }
+    }
+    return out;
+  }
+
   /** Reavalia o destaque/tooltip da peça sob o cursor. */
   _updateHover(pos) {
     const dom = this.viewer.container;
     if (!this.model.hasModel || this.explode.playing || this.present.active ||
-        this.viewer.controls.navigating ||
+        this.viewer.controls.navigating || this.mode === 'boxselect' ||
         (this.mode === 'move' && this.move.gizmoBusy)) {
       this.viewer.setHover(null);
       this._hoverTip.classList.add('hidden');
       return;
     }
     const hit = this.viewer.pickComponent(pos);
+    if (this.mode === 'measure') {
+      // medição: snap de vértice/aresta/face substitui o tooltip comum
+      this.viewer.setHover(hit ? hit.comp : null);
+      dom.style.cursor = hit ? 'crosshair' : '';
+      this._hoverTip.classList.add('hidden');
+      this.measure.onHover(pos, hit);
+      return;
+    }
     this.viewer.setHover(hit ? hit.comp : null);
     dom.style.cursor = hit ? 'pointer' : '';
     if (hit) {
@@ -519,6 +635,13 @@ class App {
       const tag = (e.target.tagName || '').toLowerCase();
       if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
 
+      if (this.manual.active) {
+        if (e.key === 'ArrowRight') { this.manual.next(); return; }
+        if (e.key === 'ArrowLeft') { this.manual.prev(); return; }
+        if (e.key === ' ') { e.preventDefault(); this.manual._setAuto(!this.manual.auto); return; }
+        if (e.key === 'Escape') { this.manual.close(); return; }
+        return;
+      }
       if (e.ctrlKey && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         this.undo();
@@ -659,6 +782,7 @@ class App {
     this.setCloudSlug(null);    // novo arquivo ≠ projeto da nuvem
 
     // limpa estado anterior
+    this.manual.close();
     this.explode.close();
     this.measure.clear();
     this.select(null);

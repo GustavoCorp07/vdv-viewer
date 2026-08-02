@@ -349,6 +349,7 @@ export class ModelManager {
     if (!comp.eyeVisible) return false;
     if (!this.layerVisibilityFn(comp)) return false;
     if (this.isolatedComp && comp !== this.isolatedComp) return false;
+    if (this.manualHiddenSet && this.manualHiddenSet.has(comp)) return false;
     return true;
   }
 

@@ -4,3 +4,6 @@ dist/
 *.local
 Thumbs.db
 ArquvioTeste.step
+.deploy-pages/
+MADEIRA E MDF/
+*.rar
