@@ -81,15 +81,26 @@ export class CinematicTool {
     const cam = this.viewer.camera;
     const target = this.viewer.controls.target;
     const last = rec.cam[rec.cam.length - 1];
-    if (force || !last ||
-        last.pos.distanceTo(cam.position) > CAM_EPS ||
-        last.target.distanceTo(target) > CAM_EPS) {
+    const camMoved = !last ||
+      last.pos.distanceTo(cam.position) > CAM_EPS ||
+      last.target.distanceTo(target) > CAM_EPS;
+    if (force || camMoved) {
+      // QUADRO DE RETENÇÃO: a câmera fica cravada onde estava até o
+      // instante em que o movimento realmente começa — nada de deriva
+      if (last && camMoved && t - last.t > 0.22) {
+        rec.cam.push({ t: t - 0.1, pos: last.pos.clone(), target: last.target.clone() });
+      }
       rec.cam.push({ t, pos: cam.position.clone(), target: target.clone() });
     }
     for (const c of this.app.model.components) {
       const track = rec.tracks.get(c);
-      const lastOff = track[track.length - 1].off;
-      if (lastOff.distanceToSquared(c.group.position) > 0.01) {
+      const lastK = track[track.length - 1];
+      if (lastK.off.distanceToSquared(c.group.position) > 0.01) {
+        // idem para cada peça: parada até 0,1s antes de mover — a ordem
+        // dos movimentos no replay fica IDÊNTICA à gravação
+        if (t - lastK.t > 0.22) {
+          track.push({ t: t - 0.1, off: lastK.off.clone() });
+        }
         track.push({ t, off: c.group.position.clone() });
       }
     }
