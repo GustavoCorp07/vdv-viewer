@@ -205,6 +205,16 @@ export class ModelManager {
     return asm;
   }
 
+  /** Acrescenta componentes a uma montagem JÁ existente. */
+  addToAssembly(asm, comps) {
+    for (const c of comps) {
+      if (c.assembly === asm) continue;
+      if (c.assembly) this.dissolveIfEmpty(this.removeFromAssembly(c));
+      c.assembly = asm;
+      asm.members.push(c);
+    }
+  }
+
   removeFromAssembly(comp) {
     const asm = comp.assembly;
     if (!asm) return null;

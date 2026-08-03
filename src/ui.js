@@ -25,7 +25,8 @@ const ICONS = {
   tex: '<svg viewBox="0 0 24 24" fill="none" stroke="#8a5a2b" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9c4-2.5 7 2.5 11 0s7 0 7 0M3 15c4-2.5 7 2.5 11 0s7 0 7 0" opacity="0.8"/></svg>',
   render: '<svg viewBox="0 0 24 24" fill="none" stroke="#b3541e" stroke-width="1.6"><circle cx="12" cy="12" r="8.6"/><circle cx="12" cy="12" r="3.4" fill="#b3541e" fill-opacity="0.25"/><path d="M12 3.4v3M12 17.6v3M3.4 12h3M17.6 12h3"/></svg>',
   manual: '<svg viewBox="0 0 24 24" fill="none" stroke="#2c7a4b" stroke-width="1.6"><path d="M4 4.5h6.5a2 2 0 0 1 2 2v13a2 2 0 0 0-2-2H4v-13z"/><path d="M20 4.5h-6.5a2 2 0 0 0-2 2v13a2 2 0 0 1 2-2H20v-13z"/><path d="M6.5 8h3M6.5 11h3M14.5 8h3M14.5 11h3"/></svg>',
-  hideeye: '<svg viewBox="0 0 24 24" fill="none" stroke="#a2543a" stroke-width="1.8"><path d="M4 4l16 16M9.9 6.3A9.8 9.8 0 0 1 12 5.8c6 0 9.5 6.2 9.5 6.2a17 17 0 0 1-3.3 3.9M6 8.2A16 16 0 0 0 2.5 12S6 18.2 12 18.2c1 0 2-.16 2.9-.44"/></svg>'
+  hideeye: '<svg viewBox="0 0 24 24" fill="none" stroke="#a2543a" stroke-width="1.8"><path d="M4 4l16 16M9.9 6.3A9.8 9.8 0 0 1 12 5.8c6 0 9.5 6.2 9.5 6.2a17 17 0 0 1-3.3 3.9M6 8.2A16 16 0 0 0 2.5 12S6 18.2 12 18.2c1 0 2-.16 2.9-.44"/></svg>',
+  cine: '<svg viewBox="0 0 24 24" fill="none" stroke="#cc3b3b" stroke-width="1.7"><circle cx="12" cy="12" r="8.6"/><circle cx="12" cy="12" r="3.2" fill="#cc3b3b"/></svg>'
 };
 
 const EYE_ON =
@@ -78,7 +79,8 @@ export class UI {
           { id: 'texture', icon: 'tex', label: 'Textura', title: 'Aplicar texturas MDF (biblioteca com busca)', needsModel: true, onClick: () => app.texture.toggle() },
           { id: 'render', icon: 'render', label: 'Renderi-\nzar', title: 'Renderização ultra-realista + foto e vídeo 4K', needsModel: true, onClick: () => app.render.open() },
           { id: 'explode', icon: 'explode', label: 'Explosão\nIA', title: 'Explosão automática inteligente com câmera cinematográfica', needsModel: true, onClick: () => app.explode.play() },
-          { id: 'manual', icon: 'manual', label: 'Manual de\nmontagem', title: 'Passo a passo interativo de montagem com ferragens por etapa', needsModel: true, onClick: () => app.manual.open() }
+          { id: 'manual', icon: 'manual', label: 'Manual de\nmontagem', title: 'Passo a passo interativo de montagem com ferragens por etapa', needsModel: true, onClick: () => app.manual.open() },
+          { id: 'cine', icon: 'cine', label: 'Cinemá-\ntica', title: 'Gravar movimentos e câmera; replay suavizado com reverso, loop e vídeo', needsModel: true, toggle: true, onClick: () => app.cinematic.toggle() }
         ]
       },
       {
@@ -149,6 +151,12 @@ export class UI {
 
   setToggleState(id, on) {
     if (this.toggleButtons[id]) this.toggleButtons[id].classList.toggle('active', on);
+  }
+
+  setRecording(id, on) {
+    if (this.toggleButtons[id]) {
+      this.toggleButtons[id].classList.toggle('recording', on);
+    }
   }
 
   // ---------------- Vistas ----------------

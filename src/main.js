@@ -11,6 +11,7 @@ import { MeasureTool } from './measure.js';
 import { TextureTool } from './texture.js';
 import { RenderTool } from './render.js';
 import { ManualTool } from './manual.js';
+import { CinematicTool } from './cinematic.js';
 import { BomTool } from './bom.js';
 import { UI } from './ui.js';
 import { Auth } from './auth.js';
@@ -45,6 +46,7 @@ class App {
     this.texture = new TextureTool(this);
     this.render = new RenderTool(this);
     this.manual = new ManualTool(this);
+    this.cinematic = new CinematicTool(this);
     this.bom = new BomTool(this);
 
     this.mode = 'select';
@@ -326,6 +328,46 @@ class App {
       'Ela agora se move e explode como um bloco único.', 'success');
   }
 
+  /** Modal para escolher a montagem de destino e acrescentar as peças. */
+  addToAssemblyPrompt(comps) {
+    const asms = this.model.assemblies;
+    if (!asms.length) {
+      this.ui.toast('Nenhuma montagem criada ainda — use "Criar montagem".', 'warn');
+      return;
+    }
+    const content = document.createElement('div');
+    const p = document.createElement('p');
+    p.style.cssText = 'margin-bottom:10px;font-size:12px;color:#5a6572';
+    p.textContent = comps.length === 1
+      ? `Adicionar "${comps[0].name}" a qual montagem?`
+      : `Adicionar ${comps.length} componentes a qual montagem?`;
+    content.appendChild(p);
+    const wrap = document.createElement('div');
+    wrap.className = 'color-pick-list';
+    let close;
+    for (const asm of asms) {
+      const b = document.createElement('button');
+      b.className = 'color-pick';
+      b.textContent = `📦 ${asm.name} — ${asm.members.length} peça(s)`;
+      b.addEventListener('click', () => {
+        this.model.addToAssembly(asm, comps);
+        this.selectAssembly(asm);
+        this.ui.refreshTree();
+        this.ui.toast(
+          `${comps.length} peça(s) adicionada(s) à montagem "${asm.name}" ` +
+          `(agora com ${asm.members.length}).`, 'success');
+        if (close) close();
+      });
+      wrap.appendChild(b);
+    }
+    content.appendChild(wrap);
+    close = this.ui.showModal({
+      title: '➕ Adicionar à montagem',
+      content,
+      actions: [{ label: 'Cancelar' }]
+    });
+  }
+
   dissolveAssembly(asm) {
     const name = asm.name;
     this.model.dissolveAssembly(asm);
@@ -582,11 +624,23 @@ class App {
       const n = this.selectedComps.size;
       const items = [];
       if (this.selectedAssembly) {
+        items.push({ label: `➖ Remover "${comp.name}" da montagem`,
+          onClick: () => {
+            const asm = comp.assembly;
+            this.model.dissolveIfEmpty(this.model.removeFromAssembly(comp));
+            this.select(null);
+            this.ui.refreshTree();
+            this.ui.toast(`"${comp.name}" removida da montagem "${asm.name}".`);
+          } });
         items.push({ label: '⛓ Desfazer montagem',
           onClick: () => this.dissolveAssembly(this.selectedAssembly) });
       } else {
         items.push({ label: `📦 Criar montagem (${n} peças)…`,
           onClick: () => this.createAssemblyFromSelection() });
+        if (this.model.assemblies.length) {
+          items.push({ label: `➕ Adicionar seleção à montagem…`,
+            onClick: () => this.addToAssemblyPrompt(this.selectionComps()) });
+        }
       }
       items.push(
         { label: `👁 Ocultar seleção (${n})`, onClick: () => this.hideSelection() },
@@ -615,8 +669,19 @@ class App {
         onClick: () => this.texture.rotate(comp) });
     }
     if (comp.assembly) {
+      items.unshift({ label: `➖ Remover desta montagem`,
+        onClick: () => {
+          const asm = comp.assembly;
+          this.model.dissolveIfEmpty(this.model.removeFromAssembly(comp));
+          this.select(null);
+          this.ui.refreshTree();
+          this.ui.toast(`"${comp.name}" removida da montagem "${asm.name}".`);
+        } });
       items.unshift({ label: `⛓ Desfazer montagem "${comp.assembly.name}"`,
         onClick: () => this.dissolveAssembly(comp.assembly) });
+    } else if (this.model.assemblies.length) {
+      items.push({ label: '➕ Adicionar à montagem…',
+        onClick: () => this.addToAssemblyPrompt([comp]) });
     }
     this.ui.contextMenu(x, y, comp.name, items);
   }
@@ -697,6 +762,7 @@ class App {
         this.fitAll();
       } else if (e.key === 'Escape') {
         if (this.present.active) { this.exitPresent(); return; }
+        if (this.cinematic.playing) { this.cinematic._closeReplay(); return; }
         if (this.layers.capture) { this.layers.cancelCapture(); return; }
         if (this.viewer.viewLock) { this.unlockView(); return; }
         if (this.explode.playing) { this.explode.skip(); return; }
@@ -868,6 +934,7 @@ class App {
     this.setCloudSlug(null);    // novo arquivo ≠ projeto da nuvem
 
     // limpa estado anterior
+    this.cinematic.reset();
     this.manual.close();
     this.explode.close();
     this.measure.clear();
