@@ -182,6 +182,10 @@ export class MoveTool {
         comp.userOffset.copy(prev);
         comp.applyTransform();
       }
+    } else if (entry.type === 'hide') {
+      for (const comp of entry.comps) comp.eyeVisible = true;
+      this.app.model.applyVisibilityAll();
+      this.app.ui.refreshTree();
     }
     this.app.props.refresh();
   }

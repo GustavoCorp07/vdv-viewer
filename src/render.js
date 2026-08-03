@@ -93,16 +93,18 @@ export class RenderTool {
   _photo(content) {
     const q = QUALITIES[content.querySelector('[data-role="q"]').value];
     const r = this.viewer.renderer;
-    const camAspect = this.viewer.camera.aspect;
+    const camAspect = this.viewer.perspCamera.aspect;
     r.setSize(q.w, q.h, false);
-    this.viewer.camera.aspect = q.w / q.h;
-    this.viewer.camera.updateProjectionMatrix();
+    this.viewer.perspCamera.aspect = q.w / q.h;
+    this.viewer.perspCamera.updateProjectionMatrix();
+    this.viewer._syncOrthoFrustum(); // caso a foto seja numa vista travada
     this.viewer.render();
     const url = r.domElement.toDataURL('image/png');
     r.setSize(this.viewer.container.clientWidth,
       this.viewer.container.clientHeight);
-    this.viewer.camera.aspect = camAspect;
-    this.viewer.camera.updateProjectionMatrix();
+    this.viewer.perspCamera.aspect = camAspect;
+    this.viewer.perspCamera.updateProjectionMatrix();
+    this.viewer._syncOrthoFrustum();
     const a = document.createElement('a');
     a.href = url;
     a.download = `vdv-render-${q.w}x${q.h}.png`;
@@ -127,10 +129,10 @@ export class RenderTool {
     }
 
     // buffer em resolução alvo (o CSS continua no tamanho da janela)
-    this._prevAspect = this.viewer.camera.aspect;
+    this._prevAspect = this.viewer.perspCamera.aspect;
     r.setSize(q.w, q.h, false);
-    this.viewer.camera.aspect = q.w / q.h;
-    this.viewer.camera.updateProjectionMatrix();
+    this.viewer.perspCamera.aspect = q.w / q.h;
+    this.viewer.perspCamera.updateProjectionMatrix();
 
     const box = this.app.model.unionBox();
     const s0 = this.viewer.controls.getSpherical();
@@ -187,8 +189,8 @@ export class RenderTool {
     const r = this.viewer.renderer;
     r.setSize(this.viewer.container.clientWidth,
       this.viewer.container.clientHeight);
-    this.viewer.camera.aspect = this._prevAspect;
-    this.viewer.camera.updateProjectionMatrix();
+    this.viewer.perspCamera.aspect = this._prevAspect;
+    this.viewer.perspCamera.updateProjectionMatrix();
     this.viewer.controls.enabled = true;
     if (this._rec) this._rec.prog.classList.add('hidden');
     this._rec = null;

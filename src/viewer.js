@@ -35,7 +35,11 @@ export class Viewer {
     this.overlayGroup = new THREE.Group(); // medições etc. (sem picking)
     this.scene.add(this.overlayGroup);
 
-    this.camera = new THREE.PerspectiveCamera(45, 1, 1, 1000000);
+    this.perspCamera = new THREE.PerspectiveCamera(45, 1, 1, 1000000);
+    this.orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 1000000);
+    this.camera = this.perspCamera;      // ativa (persp por padrão)
+    this.projection = 'persp';
+    this.onProjectionChanged = null;
     this.camera.up.set(0, 0, 1);
     this.camera.position.set(900, -900, 650);
     this.camera.lookAt(0, 0, 0);
@@ -166,8 +170,46 @@ export class Viewer {
     const w = this.container.clientWidth || 1;
     const h = this.container.clientHeight || 1;
     this.renderer.setSize(w, h);
-    this.camera.aspect = w / h;
-    this.camera.updateProjectionMatrix();
+    this.perspCamera.aspect = w / h;
+    this.perspCamera.updateProjectionMatrix();
+    this._syncOrthoFrustum();
+  }
+
+  /**
+   * Alterna a projeção da câmera. As vistas travadas usam ORTOGRÁFICA
+   * (paralela, padrão TopSolid/SolidWorks: zero distorção de perspectiva).
+   */
+  setProjection(mode) {
+    if (mode === this.projection) return;
+    const from = this.camera;
+    const to = mode === 'ortho' ? this.orthoCamera : this.perspCamera;
+    to.position.copy(from.position);
+    to.up.copy(from.up);
+    to.quaternion.copy(from.quaternion);
+    this.camera = to;
+    this.controls.camera = to;
+    this.projection = mode;
+    if (mode === 'ortho') this._syncOrthoFrustum();
+    else this.perspCamera.updateProjectionMatrix();
+    if (this.onProjectionChanged) this.onProjectionChanged(to);
+  }
+
+  /**
+   * O frustum ortográfico é derivado da DISTÂNCIA atual (meia-altura =
+   * dist·tan(fov/2)): todo o resto — zoom no cursor, pan, enquadrar —
+   * funciona idêntico à perspectiva sem nenhuma matemática nova.
+   */
+  _syncOrthoFrustum() {
+    if (this.projection !== 'ortho') return;
+    const cam = this.orthoCamera;
+    const dist = this.controls.distance;
+    const buf = this.renderer.domElement;
+    const aspect = (buf.width || 1) / (buf.height || 1);
+    const halfH = dist * Math.tan(THREE.MathUtils.degToRad(45) / 2);
+    const halfW = halfH * aspect;
+    cam.left = -halfW; cam.right = halfW;
+    cam.top = halfH; cam.bottom = -halfH;
+    cam.updateProjectionMatrix();
   }
 
   onFrame(cb) { this._frameCbs.push(cb); }
@@ -182,6 +224,7 @@ export class Viewer {
     this.tweens.update(now);
     for (const cb of this._frameCbs) cb(now);
     this._updateClipPlanes();
+    this._syncOrthoFrustum();
     this._detectCameraChange();
     this.render();
   }
@@ -199,7 +242,7 @@ export class Viewer {
     const far = THREE.MathUtils.clamp(dist * 200, 20000, 5e6);
     if (Math.abs(near - this.camera.near) / near > 0.1 ||
         Math.abs(far - this.camera.far) / far > 0.1) {
-      this.camera.near = near;
+      this.camera.near = this.projection === 'ortho' ? 0.1 : near;
       this.camera.far = far;
       this.camera.updateProjectionMatrix();
     }
@@ -360,20 +403,29 @@ export class Viewer {
     return { comp, point, faceIndex, face, object: comp.mesh };
   }
 
-  /** Ponto 3D sob o cursor (pivô de órbita / zoom) — raycast leve, sem GPU. */
+  /** Ponto 3D sob o cursor (pivô de órbita / zoom) — raycast leve, sem GPU.
+   *  SEM geometria sob o cursor, ancora no plano do alvo: o zoom nunca
+   *  "puxa" a vista de volta para o centro do projeto. */
   pickPoint(ev) {
-    if (!this._pickables.length) return null;
     this._setPointerFromEvent(ev);
     this.raycaster.setFromCamera(this._pointer, this.camera);
-    const hits = this.raycaster.intersectObjects(this._pickables, false);
-    for (const h of hits) {
-      const comp = h.object.userData.comp;
-      if (!comp || !comp.group.visible) continue;
-      if (this.sectionEnabled &&
-          this.sectionPlane.distanceToPoint(h.point) < 0) continue;
-      return h.point.clone();
+    if (this._pickables.length) {
+      const hits = this.raycaster.intersectObjects(this._pickables, false);
+      for (const h of hits) {
+        const comp = h.object.userData.comp;
+        if (!comp || !comp.group.visible) continue;
+        if (this.sectionEnabled &&
+            this.sectionPlane.distanceToPoint(h.point) < 0) continue;
+        return h.point.clone();
+      }
     }
-    return null;
+    // plano perpendicular à vista passando pelo alvo (profundidade neutra)
+    const viewDir = new THREE.Vector3();
+    this.camera.getWorldDirection(viewDir);
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(
+      viewDir, this.controls.target);
+    const out = new THREE.Vector3();
+    return this.raycaster.ray.intersectPlane(plane, out) ? out : null;
   }
 
   // ---------- Destaques ----------
@@ -427,9 +479,12 @@ export class Viewer {
   fitDistanceFor(box) {
     const size = box.getSize(new THREE.Vector3());
     const radius = size.length() / 2 || 100;
-    const fov = THREE.MathUtils.degToRad(this.camera.fov);
+    // sempre em termos da perspectiva: a ortográfica deriva o frustum
+    // da mesma distância, então o enquadramento fica idêntico
+    const fov = THREE.MathUtils.degToRad(this.perspCamera.fov);
+    const aspect = this.perspCamera.aspect || 1;
     const fitH = radius / Math.sin(fov / 2);
-    const fitW = radius / Math.sin(Math.atan(Math.tan(fov / 2) * this.camera.aspect));
+    const fitW = radius / Math.sin(Math.atan(Math.tan(fov / 2) * aspect));
     return Math.max(fitH, fitW) * 1.06;
   }
 

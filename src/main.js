@@ -62,6 +62,11 @@ class App {
     this._bindKeyboard();
     this._bindFileInputs();
 
+    // troca persp/ortho: gizmo e picking passam a usar a câmera ativa
+    this.viewer.onProjectionChanged = (cam) => {
+      if (this.move && this.move.tc) this.move.tc.camera = cam;
+    };
+
     this.viewer.onFrame((now) => this._presentTick(now));
     document.addEventListener('fullscreenchange', () => {
       if (!document.fullscreenElement && this.present.active) this.exitPresent();
@@ -392,9 +397,10 @@ class App {
       if (this.mode === 'hide') {
         if (hit) {
           hit.comp.eyeVisible = false;
+          this.pushUndo({ type: 'hide', comps: [hit.comp] });
           this.model.applyVisibilityAll();
           this.ui.refreshTree();
-          this.ui.toast(`"${hit.comp.name}" ocultado.`);
+          this.ui.toast(`"${hit.comp.name}" ocultado — Ctrl+Z desfaz.`);
         }
         return;
       }
@@ -458,9 +464,14 @@ class App {
       if (this.mode === 'hide') {
         if (picked.length) {
           for (const c of picked) c.eyeVisible = false;
+          this.pushUndo({ type: 'hide', comps: picked });
           this.model.applyVisibilityAll();
           this.ui.refreshTree();
-          this.ui.toast(`${picked.length} componente(s) ocultado(s).`);
+          this.ui.toast(
+            `${picked.length} componente(s) ocultado(s) — Ctrl+Z desfaz.`);
+        } else {
+          this.ui.toast(
+            'Nenhuma peça TOTALMENTE dentro do retângulo — envolva a peça inteira.', 'warn');
         }
         return; // permanece no modo Ocultar
       }
@@ -505,30 +516,30 @@ class App {
     rectEl.style.height = Math.abs(b.y1 - b.y0) + 'px';
   }
 
-  /** Componentes visíveis cuja projeção intersecta o retângulo (coords de tela). */
+  /**
+   * Componentes visíveis cuja projeção está TOTALMENTE CONTIDA no
+   * retângulo (window selection, padrão CAD): só entra o que o usuário
+   * envolveu por inteiro — nada de peças "encostadas" na borda.
+   */
   _compsInScreenRect(minX, minY, maxX, maxY) {
     const cam = this.viewer.camera;
+    cam.updateMatrixWorld();
     const rect = this.viewer.renderer.domElement.getBoundingClientRect();
     const out = [];
     const v = this.viewer.controls.target.clone();
     for (const c of this.model.components) {
       if (!c.group.visible) continue;
       const b = c.currentAABB();
-      let sMinX = Infinity, sMinY = Infinity, sMaxX = -Infinity, sMaxY = -Infinity;
-      let anyFront = false;
-      for (let i = 0; i < 8; i++) {
+      let inside = true;
+      for (let i = 0; i < 8 && inside; i++) {
         v.set(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y,
           i & 4 ? b.max.z : b.min.z).project(cam);
-        if (v.z < 1) anyFront = true;
+        if (v.z > 1) { inside = false; break; } // atrás da câmera
         const sx = rect.left + (v.x + 1) / 2 * rect.width;
         const sy = rect.top + (-v.y + 1) / 2 * rect.height;
-        sMinX = Math.min(sMinX, sx); sMaxX = Math.max(sMaxX, sx);
-        sMinY = Math.min(sMinY, sy); sMaxY = Math.max(sMaxY, sy);
+        if (sx < minX || sx > maxX || sy < minY || sy > maxY) inside = false;
       }
-      if (anyFront && sMaxX >= minX && sMinX <= maxX &&
-          sMaxY >= minY && sMinY <= maxY) {
-        out.push(c);
-      }
+      if (inside) out.push(c);
     }
     return out;
   }
@@ -730,6 +741,7 @@ class App {
       this.ui.setStatus(
         `Vista ${labels[name]} TRAVADA — clique no botão "${labels[name]}" ou Esc para destravar a órbita`);
     };
+    v.setProjection('ortho'); // projeção paralela: zero distorção (TopSolid)
     v.setView(name, this.model.unionBox(), { exact: true });
     this.ui.refreshViewButtons();
     this.ui.toast(
@@ -743,6 +755,7 @@ class App {
     v.viewLock = null;
     v.controls.lockOrbit = false;
     v.controls.onOrbitBlocked = null;
+    v.setProjection('persp');
     v.camera.up.set(0, 0, 1);
     v.camera.lookAt(v.controls.target);
     this.ui.refreshViewButtons();
