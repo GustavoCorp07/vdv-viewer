@@ -136,7 +136,8 @@ class App {
         name: a.name,
         members: a.members.map(idx).filter((i) => i >= 0)
       })),
-      textures: this.texture.captureState()
+      textures: this.texture.captureState(),
+      textureRots: this.model.components.map((c) => c.textureRot || 0)
     };
   }
 
@@ -166,6 +167,11 @@ class App {
     for (const a of state.assemblies || []) {
       const members = (a.members || []).map((i) => comps[i]).filter(Boolean);
       if (members.length >= 2) this.model.createAssembly(a.name, members);
+    }
+    if (Array.isArray(state.textureRots)) {
+      state.textureRots.forEach((r, i) => {
+        if (comps[i]) comps[i].textureRot = r || 0;
+      });
     }
     if (state.textures) this.texture.applyState(state.textures);
     this.layers.refreshBar();
@@ -593,6 +599,10 @@ class App {
       { label: '◎ Isolar', onClick: () => { this.select(comp); this.toggleIsolate(true); } },
       { label: '✥ Mover esta peça', onClick: () => { this.select(comp); this.setMode('move'); } }
     ];
+    if (comp.textureId) {
+      items.push({ label: '🔄 Girar direção da textura (veio 90°)',
+        onClick: () => this.texture.rotate(comp) });
+    }
     if (comp.assembly) {
       items.unshift({ label: `⛓ Desfazer montagem "${comp.assembly.name}"`,
         onClick: () => this.dissolveAssembly(comp.assembly) });

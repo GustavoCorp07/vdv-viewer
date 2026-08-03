@@ -146,6 +146,7 @@ export class Component {
     this.eyeVisible = true;
     this.layerId = null;
     this.assembly = null;
+    this.textureRot = 0;
     this.userOffset = new THREE.Vector3();
     this.explodeOffset = new THREE.Vector3();
     this.treeNode = null;

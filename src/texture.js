@@ -119,19 +119,69 @@ export class TextureTool {
   }
 
   // ---------------- Aplicação ----------------
-  _ensureUV(comp) {
+  /**
+   * UVs POR FACE (box mapping): cada triângulo escolhe o plano de projeção
+   * pela própria normal — as bordas (espessura) ganham o plano delas em
+   * vez de herdarem o da face principal (que as deixava "esticadas").
+   * O veio (U) segue sempre o COMPRIMENTO da peça; comp.textureRot (0/90)
+   * gira a direção do veio para texturas amadeiradas.
+   */
+  _generateUV(comp) {
     const geo = comp.mesh.geometry;
-    if (geo.attributes.uv) return;
     const pos = geo.attributes.position;
-    const u = comp.dims.axes[0], v = comp.dims.axes[1];
+    const idx = geo.index;
+    const [aC, aL, aE] = comp.dims.axes; // comprimento, largura, espessura
     const arr = new Float32Array(pos.count * 2);
+    const rot = ((comp.textureRot || 0) % 180) === 90;
+
+    const pA = new THREE.Vector3(), pB = new THREE.Vector3(), pC = new THREE.Vector3();
+    const ab = new THREE.Vector3(), ac = new THREE.Vector3(), n = new THREE.Vector3();
     const p = new THREE.Vector3();
-    for (let i = 0; i < pos.count; i++) {
-      p.fromBufferAttribute(pos, i);
-      arr[i * 2] = p.dot(u) / UV_SCALE;
-      arr[i * 2 + 1] = p.dot(v) / UV_SCALE;
+    const triCount = idx ? idx.count / 3 : pos.count / 3;
+
+    for (let t = 0; t < triCount; t++) {
+      const i0 = idx ? idx.getX(t * 3) : t * 3;
+      const i1 = idx ? idx.getX(t * 3 + 1) : t * 3 + 1;
+      const i2 = idx ? idx.getX(t * 3 + 2) : t * 3 + 2;
+      pA.fromBufferAttribute(pos, i0);
+      pB.fromBufferAttribute(pos, i1);
+      pC.fromBufferAttribute(pos, i2);
+      ab.copy(pB).sub(pA);
+      ac.copy(pC).sub(pA);
+      n.copy(ab).cross(ac).normalize();
+
+      const dC = Math.abs(n.dot(aC));
+      const dL = Math.abs(n.dot(aL));
+      const dE = Math.abs(n.dot(aE));
+      let U, V;
+      if (dE >= dC && dE >= dL) { U = aC; V = aL; }      // face principal
+      else if (dL >= dC) { U = aC; V = aE; }             // borda longitudinal
+      else { U = aL; V = aE; }                            // topo (fim do veio)
+
+      for (const vi of [i0, i1, i2]) {
+        p.fromBufferAttribute(pos, vi);
+        let uu = p.dot(U) / UV_SCALE;
+        let vv = p.dot(V) / UV_SCALE;
+        if (rot) { const tmp = uu; uu = vv; vv = -tmp; } // veio girado 90°
+        arr[vi * 2] = uu;
+        arr[vi * 2 + 1] = vv;
+      }
     }
     geo.setAttribute('uv', new THREE.BufferAttribute(arr, 2));
+    geo.attributes.uv.needsUpdate = true;
+  }
+
+  /** Gira a direção do veio da textura da peça em 90°. */
+  rotate(comp) {
+    if (!comp.textureId) {
+      this.app.ui.toast('Aplique uma textura à peça antes de girar o veio.', 'warn');
+      return;
+    }
+    comp.textureRot = (((comp.textureRot || 0) + 90) % 180);
+    this._generateUV(comp);
+    this.app.ui.toast(
+      `Veio da textura de "${comp.name}": ${comp.textureRot === 90 ? 'girado 90°' : 'direção original'}.`,
+      'success');
   }
 
   async _load(entry) {
@@ -152,7 +202,7 @@ export class TextureTool {
     }
     try {
       const tex = await this._load(entry);
-      this._ensureUV(comp);
+      this._generateUV(comp);
       const mat = comp.mesh.material;
       mat.map = tex;
       mat.color.set(0xffffff);
