@@ -3,18 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VDV Viewer — Visualizador Profissional STEP</title>
-  <script type="module" crossorigin src="./assets/index--x7Mc0SD.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-DsGWMG7w.css">
+  <title>VDV Viewer — Motor de engenharia Van de Velde</title>
+  <link rel="icon" type="image/png" href="./assets/logo-bjwtIX0v.png" />
+  <script type="module" crossorigin src="./assets/index-CYw0-ggw.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-CozSzCbN.css">
 </head>
 <body>
   <div id="app">
     <header id="titlebar">
       <div class="logo">
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-          <path d="M12 2 3 7v10l9 5 9-5V7l-9-5z" fill="none" stroke="#4da3ff" stroke-width="1.6"/>
-          <path d="M3 7l9 5 9-5M12 12v10" fill="none" stroke="#4da3ff" stroke-width="1.6"/>
-        </svg>
+        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAACXBIWXMAAA7EAAAOxAGVKw4bAAAD7ElEQVRYhcWXTUhjVxTHfy/RMdFgYj4wG2EWSQjTjQgVstYg+Ingoh3dZyUuVHAWJuo2uhTc1U2g2y6sbgqCDYIwUkENlCBFkGgmvnwQjCHa20WeaWry8t7QmfYPF5J7zz3/8879OP8roR82YBQYAvqBt0ofQA74A/gN+AX4Wen7IvABPwAlQOhsJWWO798QdwJbQOUziF+3iuKjU41EUun3AD8B79Qmer1e/H4/AIlEgmQy2epjLoEpoMHI0MR4ADjWIl9aWqJcLlMul1lZWcHj8bQK4J3ic6CVEVS//BMaqZ2cnBTBYLD2f2xsTIyPj+tZkk8KRw1tdb87qabd2SpCg8GAz+fD6XTS29sLQH9/P3d3d+zv7/P8/NxqulPh+BZ4eD24pfUFFotFHB0diWKxKC4vL8XFxUWtFQoFcXJyImw2m55MbL0m96Fjt6+vr4vz83PhcDgaxmw2mzg7OxObm5t6T4cP/t6EH/jncjRFIBAgFotxf3/fMJbL5YjFYgQCAS03KFwfXgKwAd/pmWU0GqlUKqrjlUoFo9GoxxUKp81A9Xo1qVkZDAbW1tZoa9NMUA2SJLGxsYHJpOoWhXPUQPVuV4XFYiESidDd3a07gI6ODlZXV7Hb7VqmQwaqheWL4jOWod9Atar9XwG8fdmEqnh4eCASiZDP53UHUCwWCYfDZDIZLVObBDzTvCbUYLVa2dnZYWJigmKxqOrY4XBgtVrZ29sjFAohy7JWAH9KwD3QcrdEo1FGRkaIRqMIIbScsrCwwOHhIcvLy1qmMsBHWtxaZrNZ5PN5MTU1pVsHDA8Pi6urKz22H9uoyijVMmk2m7FYLLhcLoaGWp7YGtxut54jiMLNe61IFxcXRSqVErIsi0qlIgqFgpBlWWSzWZHNZoUsyyKXy4mnpychy7K4vr4Ws7OzejLwHqqnQJfes1qtIpPJNK147e3tIpVKNS1UKq2EchXngB/15Gt0dJRcLkexWGwYE0KQTqcJBoN6XKFw5l40oQ+4QKMiOhwOdnd38fv9pNNpJEmqtZ6eHk5PTwmFQhQKBS3yJ+Ab4Pf6Tk1BQl26TSaT2N7eFuFwWBiNRiFJku5TQp0gqb8zfwWmAZdW+C6Xi/n5eaanp/F6vXR1dZFIJHh8fNSaClWF/D1VUdIgyz1U1auqLvT5fMTjcZLJJBaLhVKpxJs3b7Db7QwODnJ7e9uKPAMEqJPnr6/gJDCiGDbF3Nwcx8fHBAIB4vE4BwcHDAwMcHNzw8zMjBb5CE3eBs3gobopG9bP6XQKt9stAOF2u2vHrq+vT1itVrU1v+CVHNeD/+Rppgdf9XGq9jZshq/yPP8LZV4yVFJt9lUAAAAASUVORK5CYII=" alt="VDV" class="logo-img" />
         <span class="logo-name">VDV<b>Viewer</b></span>
         <span class="logo-credit">created by Gustavinho</span>
       </div>
@@ -47,14 +45,11 @@
         <div id="view-buttons" aria-label="Orientação de vista"></div>
 
         <div id="welcome-card">
-          <svg viewBox="0 0 24 24" width="52" height="52" aria-hidden="true">
-            <path d="M12 2 3 7v10l9 5 9-5V7l-9-5z" fill="none" stroke="#3d7dc4" stroke-width="1.2"/>
-            <path d="M3 7l9 5 9-5M12 12v10" fill="none" stroke="#3d7dc4" stroke-width="1.2"/>
-          </svg>
+          <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAACXBIWXMAAA7EAAAOxAGVKw4bAAAD7ElEQVRYhcWXTUhjVxTHfy/RMdFgYj4wG2EWSQjTjQgVstYg+Ingoh3dZyUuVHAWJuo2uhTc1U2g2y6sbgqCDYIwUkENlCBFkGgmvnwQjCHa20WeaWry8t7QmfYPF5J7zz3/8879OP8roR82YBQYAvqBt0ofQA74A/gN+AX4Wen7IvABPwAlQOhsJWWO798QdwJbQOUziF+3iuKjU41EUun3AD8B79Qmer1e/H4/AIlEgmQy2epjLoEpoMHI0MR4ADjWIl9aWqJcLlMul1lZWcHj8bQK4J3ic6CVEVS//BMaqZ2cnBTBYLD2f2xsTIyPj+tZkk8KRw1tdb87qabd2SpCg8GAz+fD6XTS29sLQH9/P3d3d+zv7/P8/NxqulPh+BZ4eD24pfUFFotFHB0diWKxKC4vL8XFxUWtFQoFcXJyImw2m55MbL0m96Fjt6+vr4vz83PhcDgaxmw2mzg7OxObm5t6T4cP/t6EH/jncjRFIBAgFotxf3/fMJbL5YjFYgQCAS03KFwfXgKwAd/pmWU0GqlUKqrjlUoFo9GoxxUKp81A9Xo1qVkZDAbW1tZoa9NMUA2SJLGxsYHJpOoWhXPUQPVuV4XFYiESidDd3a07gI6ODlZXV7Hb7VqmQwaqheWL4jOWod9Atar9XwG8fdmEqnh4eCASiZDP53UHUCwWCYfDZDIZLVObBDzTvCbUYLVa2dnZYWJigmKxqOrY4XBgtVrZ29sjFAohy7JWAH9KwD3QcrdEo1FGRkaIRqMIIbScsrCwwOHhIcvLy1qmMsBHWtxaZrNZ5PN5MTU1pVsHDA8Pi6urKz22H9uoyijVMmk2m7FYLLhcLoaGWp7YGtxut54jiMLNe61IFxcXRSqVErIsi0qlIgqFgpBlWWSzWZHNZoUsyyKXy4mnpychy7K4vr4Ws7OzejLwHqqnQJfes1qtIpPJNK147e3tIpVKNS1UKq2EchXngB/15Gt0dJRcLkexWGwYE0KQTqcJBoN6XKFw5l40oQ+4QKMiOhwOdnd38fv9pNNpJEmqtZ6eHk5PTwmFQhQKBS3yJ+Ab4Pf6Tk1BQl26TSaT2N7eFuFwWBiNRiFJku5TQp0gqb8zfwWmAZdW+C6Xi/n5eaanp/F6vXR1dZFIJHh8fNSaClWF/D1VUdIgyz1U1auqLvT5fMTjcZLJJBaLhVKpxJs3b7Db7QwODnJ7e9uKPAMEqJPnr6/gJDCiGDbF3Nwcx8fHBAIB4vE4BwcHDAwMcHNzw8zMjBb5CE3eBs3gobopG9bP6XQKt9stAOF2u2vHrq+vT1itVrU1v+CVHNeD/+Rppgdf9XGq9jZshq/yPP8LZV4yVFJt9lUAAAAASUVORK5CYII=" alt="VDV" class="welcome-logo" />
           <h1>VDV Viewer</h1>
           <p class="welcome-credit">created by Gustavinho</p>
-          <p>Visualizador profissional de projetos <b>.STEP</b> — 100% no seu navegador.<br/>
-             Abra um arquivo local ou um projeto salvo na nuvem.</p>
+          <p><b>Motor de engenharia Van de Velde</b><br/>
+             Abra um arquivo <b>.STEP</b> local ou um projeto salvo na nuvem.</p>
           <div class="welcome-actions">
             <button id="welcome-open" class="btn-primary">Abrir arquivo STEP</button>
             <button id="welcome-demo" class="btn-secondary">Ver modelo de demonstração</button>
@@ -67,6 +62,8 @@
         <div id="section-panel" class="floating-panel hidden"></div>
         <div id="texture-panel" class="floating-panel texture-panel hidden"></div>
         <div id="explode-hud" class="hidden"></div>
+        <div id="manual-hud" class="hidden"></div>
+        <div id="cine-hud" class="hidden"></div>
         <div id="measure-labels"></div>
         <div id="hover-tip" class="hidden"></div>
         <div id="box-select-rect" class="hidden"></div>
