@@ -65,7 +65,11 @@ export class CloudExplorer {
         if (!full) throw new Error('Projeto não encontrado na nuvem.');
         row = full;
       }
-      const buffer = await downloadProjectFile(row);
+      const buffer = await downloadProjectFile(row, (i, n) => {
+        if (n > 1) {
+          this.app.ui.loading(true, `Baixando "${row.name}" — parte ${i}/${n}…`);
+        }
+      });
       await this.app._loadBuffer(buffer, row.file_name || row.name + '.step');
       this.app.applyCloudState(row.state || {});
       this.app.setCloudSlug(row.slug);
@@ -95,7 +99,10 @@ export class CloudExplorer {
         fileName: this.app.lastFileName || name + '.step',
         buffer: this.app.lastBuffer,
         state: this.app.captureCloudState(),
-        username: this.app.auth.user ? this.app.auth.user.display_name : '?'
+        username: this.app.auth.user ? this.app.auth.user.display_name : '?',
+        onProgress: (i, n) => {
+          btn.textContent = n > 1 ? `Enviando ${i}/${n}…` : 'Salvando…';
+        }
       });
       this.app.setCloudSlug(row.slug);
       const url = shareUrl(row.slug);
